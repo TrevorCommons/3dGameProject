@@ -1,7 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
 
-const GRID_SIZE = 50;
-const TILE_SIZE = 1;
+export const GRID_SIZE = 50;
+export const TILE_SIZE = 1;
 
 export function createPath(scene) {
     // --- Initialize grid ---

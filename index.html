@@ -6,6 +6,20 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div id="ui">
+        💎 Gold: <span id="gold">100</span> | 🧟 Wave: <span id="wave">1</span>
+      </div>
+      <canvas id="gameCanvas"></canvas>
+    
+      <!-- Import map to load Three.js as an ES module -->
+      <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.module.js",
+          "OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.159.0/examples/jsm/controls/OrbitControls.js"
+        }
+      }
+      </script>
     <canvas id="gameCanvas"></canvas>
     <!-- main.js is now a module -->
     <script type="module" src="main.js"></script>

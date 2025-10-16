@@ -1,7 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
 import { Player } from './game/player.js';
 import { createPath } from './game/path.js';
-import { isBuildable } from './game/tower.js';
+// import { isBuildable } from './game/tower.js';
 
 // Constants
 const TILE_SIZE = 1;
@@ -42,16 +42,67 @@ const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.position.y = -0.5; // so top of ground is at y=0
 scene.add(ground);
 
-const {pathTiles, tiles, gridArray} = createPath(scene);
+const { pathTiles, tiles, grid: gridArray } = createPath(scene);
 
 // Extract path coordinates for potential use (e.g., enemy spawning)
 const pathCoords = [];
-for (let y = 0; y < tiles.length; y++) {
-  for (let x = 0; x < tiles[y].length; x++) {
-    if (tiles[y][x] === 1) pathCoords.push({ x, y });
+for (let y = 0; y < gridArray.length; y++) {
+  for (let x = 0; x < gridArray[y].length; x++) {
+    if (gridArray[y][x] === 1) pathCoords.push({ x, y });
   }
 }
+
 //need to add some substance to the map (trees, rocks, castle, etc.)
+function addDecorations(scene, gridArray) {
+  const treeGeometry = new THREE.ConeGeometry(2, 5, 12);
+  const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x006400 });
+  const rockGeometry = new THREE.DodecahedronGeometry(.8);
+  const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+
+  for (let y = 0; y < gridArray.length; y++) {
+    for (let x = 0; x < gridArray[y].length; x++) {
+      // Skip path tiles
+      if (gridArray[y][x] === 1) continue;
+
+      // Got this random generator so should make levels vary
+      const rand = Math.random();
+      if (rand < 0.05) { // 5% chance of tree
+        const tree = new THREE.Mesh(treeGeometry, treeMaterial);
+        tree.position.set(x - GRID_SIZE / 2, 0.75, y - GRID_SIZE / 2);
+        scene.add(tree);
+      } else if (rand < 0.08) { // 3% chance of rock
+        const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+        rock.position.set(x - GRID_SIZE / 2, 0.25, y - GRID_SIZE / 2);
+        scene.add(rock);
+      }
+    }
+  }
+}
+addDecorations(scene, gridArray);
+
+// Castle
+const castleGeometry = new THREE.BoxGeometry(3, 3, 3);
+const castleMaterial = new THREE.MeshStandardMaterial({color: 0x777777});
+const castle = new THREE.Mesh(castleGeometry, castleMaterial);
+// Place at end of path
+const endTile = pathCoords[pathCoords.length - 1];
+castle.position.set(endTile.x - GRID_SIZE / 2, 1.5, endTile.y - GRID_SIZE / 2);
+scene.add(castle);
+
+// Sun
+const sunGeometry = new THREE.CircleGeometry(1.5, 20, 15);
+const sunMaterial = new THREE.MeshStandardMaterial({color: 0xFFF200});
+const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+//East placement
+const eastX = GRID_SIZE - 1;
+const eastZ = Math.floor(GRID_SIZE / 2)
+sun.position.set(
+  eastX - GRID_SIZE / 2, // x
+  20,                      // y (height / 2)
+  eastZ - GRID_SIZE / 2  // z
+);
+scene.add(sun);
+
 // Grid helper (optional)
 const grid = new THREE.GridHelper(GRID_SIZE, GRID_SIZE);
 scene.add(grid);
