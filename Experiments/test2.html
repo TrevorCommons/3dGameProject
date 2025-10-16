@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Map Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body style="margin:0; overflow:hidden;">
+<canvas id="mapCanvas"></canvas>
+
+<script>
+const mapWidth = 20;
+const mapHeight = 20;
+const tileSize = 1;
+let curX, curY;
+let curDirection = "DOWN";
+let forceDirectionChange = false;
+let continueLeft = false;
+let continueRight = false;
+let currentCount = 0;
+
+// --- Initialize THREE.js ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({canvas: document.getElementById("mapCanvas")});
+renderer.setSize(window.innerWidth, window.innerHeight);
+camera.position.set(mapWidth / 2, 15, mapHeight + 10);
+camera.lookAt(mapWidth / 2, 0, mapHeight / 2);
+
+// Lights
+const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+scene.add(ambient);
+
+// Tile data (like Unity's TileData)
+let tileData = [];
+const emptyMaterial = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
+const pathMaterial = new THREE.MeshLambertMaterial({ color: 0x3333ff });
+
+function createTile(x, y) {
+  const geometry = new THREE.BoxGeometry(tileSize, 0.2, tileSize);
+  const mesh = new THREE.Mesh(geometry, emptyMaterial);
+  mesh.position.set(x, 0, y);
+  scene.add(mesh);
+  return { mesh, tileID: 0 };
+}
+
+function generateMap() {
+  for (let x = 0; x < mapWidth; x++) {
+    tileData[x] = [];
+    for (let y = 0; y < mapHeight; y++) {
+      tileData[x][y] = createTile(x, y);
+    }
+  }
+  generatePath();
+}
+
+function updateTile(x, y, isPath) {
+  if (tileData[x] && tileData[x][y]) {
+    tileData[x][y].tileID = isPath ? 1 : 0;
+    tileData[x][y].mesh.material = isPath ? pathMaterial : emptyMaterial;
+  }
+}
+
+// --- Path Generation Logic ---
+function generatePath() {
+  curX = Math.floor(Math.random() * mapWidth);
+  curY = 0;
+  curDirection = "DOWN";
+  updateTile(curX, curY, true);
+
+  const interval = setInterval(() => {
+    if (curY >= mapHeight - 1) {
+      clearInterval(interval);
+      return;
+    }
+
+    checkDirections();
+    chooseDirection();
+
+    updateTile(curX, curY, true);
+    if (curDirection === "DOWN") curY++;
+
+  }, 100); // delay for visible animation
+}
+
+function checkDirections() {
+  if (curDirection === "LEFT" && curX - 1 >= 0 && tileData[curX - 1][curY].tileID === 0) {
+    curX--;
+  } else if (curDirection === "RIGHT" && curX + 1 < mapWidth && tileData[curX + 1][curY].tileID === 0) {
+    curX++;
+  } else if (curDirection === "UP" && curY - 1 >= 0 && tileData[curX][curY - 1].tileID === 0) {
+    curY--;
+  } else if (curDirection !== "DOWN") {
+    forceDirectionChange = true;
+  }
+}
+
+function chooseDirection() {
+  if (currentCount < 3 && !forceDirectionChange) {
+    currentCount++;
+  } else {
+    const chanceToChange = Math.floor(Math.random() * 2) === 0;
+    if (chanceToChange || forceDirectionChange || currentCount > 7) {
+      currentCount = 0;
+      forceDirectionChange = false;
+      changeDirection();
+    }
+    currentCount++;
+  }
+}
+
+function changeDirection() {
+  const dirValue = Math.floor(Math.random() * 3);
+  if (curDirection === "LEFT" || curDirection === "RIGHT") {
+    curY++;
+    curDirection = "DOWN";
+    return;
+  }
+
+  if (dirValue === 0 && curX > 0) {
+    curDirection = "LEFT";
+  } else if (dirValue === 1 && curX < mapWidth - 1) {
+    curDirection = "RIGHT";
+  } else {
+    curDirection = "DOWN";
+  }
+}
+
+// --- Regenerate on space press ---
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    for (let x = 0; x < mapWidth; x++) {
+      for (let y = 0; y < mapHeight; y++) {
+        updateTile(x, y, false);
+      }
+    }
+    generatePath();
+  }
+});
+
+// --- Render Loop ---
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+
+generateMap();
+</script>
+</body>
+</html>
