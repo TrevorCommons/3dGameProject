@@ -116,3 +116,4 @@ export function createPath(scene) {
     // Return all path and tile meshes, the grid, and the ordered path coordinates
     return { pathTiles, tiles, grid, pathCoords };
 }
+}

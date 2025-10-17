@@ -107,6 +107,10 @@ sun.position.set(
 );
 scene.add(sun);
 
+  }
+}
+
+spawnWave(5); // Spawn 5 enemies for the wave
 
 // Player
 const player = new Player();
