@@ -60,16 +60,16 @@ function spawnWave(numEnemies) {
 spawnWave(5); // Spawn 5 enemies for the wave
 
 // need to add some substance to the map (trees, rocks, castle, etc.)
-function addDecorations(scene, gridArray) {
+function addDecorations(scene, grid) {
   const treeGeometry = new THREE.ConeGeometry(2, 5, 12);
   const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x006400 });
   const rockGeometry = new THREE.DodecahedronGeometry(0.8);
   const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
 
-  for (let y = 0; y < gridArray.length; y++) {
-    for (let x = 0; x < gridArray[y].length; x++) {
+  for (let y = 0; y < grid.length; y++) {
+    for (let x = 0; x < grid[y].length; x++) {
       // Skip path tiles
-      if (gridArray[y][x] === 1) continue;
+      if (grid[y][x] === 1) continue;
 
       const rand = Math.random();
       if (rand < 0.05) {
@@ -84,7 +84,7 @@ function addDecorations(scene, gridArray) {
     }
   }
 }
-addDecorations(scene, gridArray);
+addDecorations(scene, grid);
 
 // Castle
 const castleGeometry = new THREE.BoxGeometry(3, 3, 3);
@@ -107,9 +107,7 @@ sun.position.set(
 );
 scene.add(sun);
 
-  }
-}
-
+  
 spawnWave(5); // Spawn 5 enemies for the wave
 
 // Player
