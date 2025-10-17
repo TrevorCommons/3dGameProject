@@ -7,8 +7,15 @@
 </head>
 <body>
     <div id="ui">
-        💎 Gold: <span id="gold">100</span> | 🧟 Wave: <span id="wave">1</span>
+        💎 Gold: <span id="gold">100</span> | 🧟 Wave: <span id="wave">1</span> | Enemies: <span id="enemiesRemaining">0</span>
+        <button id="cameraToggle">Toggle Camera (C)</button>
+        <button id="startRound">Start Round</button>
+        <div id="waveProgress" style="display:inline-block; vertical-align:middle; margin-left:12px;">
+          <div id="waveProgressBar"></div>
+        </div>
       </div>
+      <!-- Crosshair for first-person -->
+      <div id="crosshair" style="display:none;">+</div>
       <canvas id="gameCanvas"></canvas>
     
       <!-- Import map to load Three.js as an ES module -->
