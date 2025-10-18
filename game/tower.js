@@ -12,6 +12,16 @@ export class Tower {
     this.scene = scene;
     this.level = 1;
     this.mesh = null;
+    this.attackCooldown = 1.0; // seconds
+    this.lastAttackTime = 0;
+  }
+
+  canAttack(currentTime) {
+    return currentTime - this.lastAttackTime >= this.attackCooldown;
+  }
+
+  recordAttack(currentTime) {
+    this.lastAttackTime = currentTime;
   }
 
   update(playerOrEnemies) {
@@ -29,12 +39,14 @@ export class HealerTower extends Tower {
     scene.add(this.mesh);
   }
 
-  update(player) {
-    const dx = player.x - this.x;
-    const dy = player.y - this.y;
-    if (Math.sqrt(dx*dx + dy*dy) <= 3) {
+  update(player, currentTime) {
+    if (!this.canAttack(currentTime)) return;
+
+    const dx = player.mesh.position.x - this.mesh.position.x;
+    const dz = player.mesh.position.z - this.mesh.position.z;
+    if (Math.sqrt(dx*dx + dz*dz) <= 10) {
       player.health = Math.min(player.health + 0.05, player.maxHealth);
-    }
+      }
   }
 }
 
@@ -48,15 +60,18 @@ export class MageTower extends Tower {
     scene.add(this.mesh);
   }
 
-  update(enemies) {
+  update(enemies, currentTime) {
+    if (!this.canAttack(currentTime)) return;
+
     enemies.forEach(e => {
-      const dx = e.x - this.x;
-      const dy = e.y - this.y;
-      if (Math.sqrt(dx*dx + dy*dy) <= 3) {
-        const dmg = 0.1 * (this._modifiers && this._modifiers.damage ? this._modifiers.damage : 1);
-        e.health -= dmg;
+      const dx = e.mesh.position.x - this.mesh.position.x;
+      const dz = e.mesh.position.z - this.mesh.position.z;
+      if (Math.sqrt(dx*dx + dz*dz) <= 8) {
+        e.takeDamage(3);
       }
     });
+    
+    this.recordAttack(currentTime);
   }
 }
 
@@ -70,20 +85,29 @@ export class ArcherTower extends Tower {
     scene.add(this.mesh);
   }
 
-  update(enemies) {
+  update(enemies, currentTime) {
+    if (!this.canAttack(currentTime)) return;
     if (enemies.length === 0) return;
+
     let closest = enemies[0];
-    let dist = Math.hypot(closest.x - this.x, closest.y - this.y);
-    for (const e of enemies) {
-      const d = Math.hypot(e.x - this.x, e.y - this.y);
-      if (d < dist) {
-        dist = d;
-        closest = e;
-      }
-    }
-    if (dist <= 4) {
-      const dmg = 0.2 * (this._modifiers && this._modifiers.damage ? this._modifiers.damage : 1);
-      closest.health -= dmg;
+let dist = Math.hypot(
+  closest.mesh.position.x - this.mesh.position.x,
+  closest.mesh.position.z - this.mesh.position.z
+);
+
+for (const e of enemies) {
+  const d = Math.hypot(
+    e.mesh.position.x - this.mesh.position.x,
+    e.mesh.position.z - this.mesh.position.z
+  );
+  if (d < dist) {
+    dist = d;
+    closest = e;
+  }
+}
+    if (dist <= 20) {
+      closest.takeDamage(7); 
+      this.recordAttack(currentTime);
     }
   }
 }

@@ -250,6 +250,7 @@ scene.add(ground);
 
 const {pathTiles, tiles, grid, pathCoords} = createPath(scene);
 
+
 // Use pathCoords directly for enemy movement
 // Enemy wave logic
 const enemies = [];
@@ -627,7 +628,6 @@ sun.position.set(
 );
 scene.add(sun);
 
-
 // Player
 // Compute playable area bounds based on GRID_SIZE and tile placement (ground centered at 0)
 const half = GRID_SIZE / 2;
@@ -637,9 +637,11 @@ const bounds = {
   minZ: -half + 0.5,
   maxZ: half - 0.5,
 };
-const player = new Player(bounds);
+
+const player = new Player(fpCamera, bounds);
 player.mesh.position.y = 1; // raise above ground
 scene.add(player.mesh);
+player.enemies = enemies;
 
 // Player movement
 const keys = {};
@@ -1139,6 +1141,7 @@ let towersBuiltThisRound = 0;
 let towerLimitPerRound = 1;
 
 
+
 function buildTower(type, x, y) {
   if (towersBuiltThisRound >= towerLimitPerRound) return; // limit per round
   type = type.toLowerCase(); // normalize
@@ -1227,10 +1230,19 @@ window.addEventListener("click", (event) => {
 });
 
 
+// For swinging sword
+const clock = new THREE.Clock();
+
 // Animate
 function animate() {
   requestAnimationFrame(animate);
   handlePlayerMovement();
+  const delta = clock.getDelta(); // seconds since last frame
+
+  player.update(delta);
+
+  renderer.render(scene, camera);
+
   // Update first-person camera to follow player if active
   if (fpCamera && player) {
     // Apply yaw/pitch to the fpCamera orientation
@@ -1353,12 +1365,14 @@ function animate() {
   renderer.render(scene, activeCam);
 
 // Update towers
-towers.forEach(tower => {
-  if (tower instanceof HealerTower) tower.update(player);
-  else tower.update(enemies);
-  });
-}
+const currentTime = performance.now() / 1000;
 
+towers.forEach(tower => {
+  if (tower instanceof HealerTower) tower.update(player, currentTime);
+  else tower.update(enemies, currentTime);
+});
+
+}
 animate();
 
 // Handle window resize

@@ -27,9 +27,31 @@ export class Enemy {
     this.carriesLootId = options.carriesLootId || null;
     this.lootChance = options.lootChance || 0.0; // default 0 unless explicitly assigned
     this.hasDroppedLoot = false;
+    this.dead = false;
+
+    // Health bar background
+    const barBgGeo = new THREE.PlaneGeometry(0.8, 0.1);
+    const barBgMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+    this.healthBg = new THREE.Mesh(barBgGeo, barBgMat);
+    this.healthBg.position.set(0, 1.5, 0);
+    this.mesh.add(this.healthBg);
+
+    // Health bar
+    const barGeo = new THREE.PlaneGeometry(0.8, 0.1);
+    const barMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+    this.healthBar = new THREE.Mesh(barGeo, barMat);
+    this.healthBar.position.set(0, 0, 0.001);
+    this.healthBg.add(this.healthBar);
+
+    // Small damage flash timer
+    this.flashTimer = 0;
+    this.originalColor = material.color.clone();
   }
 
-  update() {
+  update(camera) {
+    if (this.dead) return;
+
+    //Movement
     if (this.currentStep < this.pathCoords.length - 1) {
       const start = this.pathCoords[this.currentStep];
       const end = this.pathCoords[this.currentStep + 1];
@@ -49,35 +71,65 @@ export class Enemy {
         this.currentStep++;
       }
     }
+
+ //Make health bar face the player's camera
+ if (camera) {
+  this.healthBg.lookAt(camera.position);
+}
+
+  // Reset color flash after hit
+  if (this.flashTimer > 0) {
+    this.flashTimer -= 0.05;
+    if (this.flashTimer <= 0) {
+      this.mesh.material.color.copy(this.originalColor);
+    }
   }
+}
 
   // Call this to deal damage to the enemy
   takeDamage(amount) {
+    if (this.dead) return null;
+
     this.health -= amount;
+    this.health = Math.max(this.health, 0);
+
+    // Flash red when hit
+    this.mesh.material.color.set(0xffffff);
+    this.flashTimer = 0.2;
+
+    // Update health bar
+    const pct = this.health / this.maxHealth;
+    this.healthBar.scale.x = pct;
+    this.healthBar.position.x = (pct - 1) / 2;
+    this.healthBar.material.color.setHSL(pct * 0.3, 1, 0.5);
+
     if (this.health <= 0) {
-      this.health = 0;
-      // Handle defeat: drop coins/loot, remove mesh, etc.
-      return this.onDefeat();
+      return this.die();
     }
+
     return null;
   }
   
-  // Call this when the enemy is defeated
-  onDefeat() {
+  die() {
+    this.dead = true;
+    this.mesh.visible = false;
+
     // Drop coins
     const coins = this.coinDrop;
-    // Drop loot (handled in loot.js)
     let loot = null;
+
     if (!this.hasDroppedLoot) {
-      // If this enemy was assigned to carry specific loot, return it
       if (this.carriesLootId) {
-        this.hasDroppedLoot = true;
         loot = { id: this.carriesLootId, pos: { x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z } };
-      } else if (this.lootChance && Math.random() < this.lootChance) {
         this.hasDroppedLoot = true;
+      } else if (this.lootChance && Math.random() < this.lootChance) {
         loot = { id: null, pos: { x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z } };
+        this.hasDroppedLoot = true;
       }
     }
+
     return { coins, loot };
   }
 }
+
+ 
