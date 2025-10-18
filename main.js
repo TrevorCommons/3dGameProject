@@ -652,6 +652,11 @@ const startGameBtn = document.getElementById('startGameBtn');
 
 function resetGameState() {
   // Reset castle, waves, towers, enemies, loot, and persistent upgrades
+  // remove any lingering game over overlay
+  try {
+    const existingOverlay = document.getElementById('gameOverOverlay');
+    if (existingOverlay && existingOverlay.parentNode) existingOverlay.parentNode.removeChild(existingOverlay);
+  } catch (e) {}
   castleHealth = 10;
   persistentState = { player: { upgrades: [] }, towers: {} };
   savePersistentState(persistentState);
@@ -1261,38 +1266,44 @@ function animate() {
       if (castleHealth <= 0) {
         // stop the round and show basic game over UI
         roundActive = false;
-        // display a simple overlay with return button
-        const overlay = document.createElement('div');
-        overlay.id = 'gameOverOverlay';
-        overlay.style.position = 'fixed';
-        overlay.style.left = '0';
-        overlay.style.top = '0';
-        overlay.style.right = '0';
-        overlay.style.bottom = '0';
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.background = 'rgba(0,0,0,0.7)';
-        overlay.style.color = 'white';
-        overlay.style.fontSize = '28px';
-        overlay.style.zIndex = 999;
-        const box = document.createElement('div');
-        box.style.textAlign = 'center';
-        box.style.padding = '20px';
-        box.style.background = '#222';
-        box.style.borderRadius = '8px';
-        box.textContent = 'Game Over - Castle Destroyed';
-        const btn = document.createElement('button');
-        btn.textContent = 'Return to Menu';
-        btn.addEventListener('click', () => {
-          // remove overlay, show start menu, and reset game state
-          try { document.body.removeChild(overlay); } catch (e) {}
-          if (startMenu) startMenu.style.display = 'flex';
-          resetGameState();
-        });
-        box.appendChild(btn);
-        overlay.appendChild(box);
-        document.body.appendChild(overlay);
+        // avoid creating multiple overlays
+        if (!document.getElementById('gameOverOverlay')) {
+          // display a simple overlay with return button
+          const overlay = document.createElement('div');
+          overlay.id = 'gameOverOverlay';
+          overlay.style.position = 'fixed';
+          overlay.style.left = '0';
+          overlay.style.top = '0';
+          overlay.style.right = '0';
+          overlay.style.bottom = '0';
+          overlay.style.display = 'flex';
+          overlay.style.alignItems = 'center';
+          overlay.style.justifyContent = 'center';
+          overlay.style.background = 'rgba(0,0,0,0.7)';
+          overlay.style.color = 'white';
+          overlay.style.fontSize = '28px';
+          overlay.style.zIndex = 999;
+          const box = document.createElement('div');
+          box.style.textAlign = 'center';
+          box.style.padding = '20px';
+          box.style.background = '#222';
+          box.style.borderRadius = '8px';
+          box.textContent = 'Game Over - Castle Destroyed';
+          const btn = document.createElement('button');
+          btn.textContent = 'Return to Menu';
+          btn.addEventListener('click', () => {
+            // remove overlay by querying DOM (more robust)
+            try {
+              const ov = document.getElementById('gameOverOverlay');
+              if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+            } catch (e) {}
+            if (startMenu) startMenu.style.display = 'flex';
+            resetGameState();
+          });
+          box.appendChild(btn);
+          overlay.appendChild(box);
+          document.body.appendChild(overlay);
+        }
       }
     }
   }
