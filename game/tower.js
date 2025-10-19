@@ -27,6 +27,7 @@ export class Tower {
 export class HealerTower extends Tower {
   constructor(x, y, scene) {
     super(x, y, scene);
+    this.attackCooldown = 0.5;
     const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
     const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
     this.mesh = new THREE.Mesh(geo, mat);
@@ -41,7 +42,7 @@ export class HealerTower extends Tower {
     const dz = player.mesh.position.z - this.mesh.position.z;
     const r = (TOWER_DEFAULTS.healer && TOWER_DEFAULTS.healer.range) || 10;
     if (Math.hypot(dx, dz) <= r) {
-      player.health = Math.min(player.health + 0.05, player.maxHealth);
+      player.health = Math.min(player.health + 10, player.maxHealth);
       this.recordAttack(currentTime);
     }
   }

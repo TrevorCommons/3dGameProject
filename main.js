@@ -168,7 +168,50 @@ const mouse = new THREE.Vector2();
 // Scene
 const scene = new THREE.Scene();
 // Use a neutral background so the horizon/sky doesn't show when we look straight down
-scene.background = new THREE.Color(0x222222);
+scene.background = new THREE.Color(0x87CEEB);
+
+// Array to store all cloud groups globally
+const clouds = [];
+const spawnMargin = 20;
+
+// Function to create a single cloud
+function createCloud(x, y, z) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+
+  // Make spheres
+  for (let i = 0; i < 5; i++) {
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(Math.random() * 1.5 + 0.5, 16, 16), mat);
+      sphere.position.set(Math.random() * 2 - 1, Math.random() * 0.5, Math.random() * 2 - 1);
+      group.add(sphere);
+  }
+  group.position.set(x, y, z);
+
+  // Add random scale to vary cloud sizes
+  const scale = 0.5 + Math.random() * 1.5;
+  group.scale.set(scale, scale, scale);
+
+  scene.add(group);
+  return group;
+}
+
+// Create clouds
+for (let i = 0; i < 100; i++) {
+    const halfArea = GRID_SIZE / 2 + spawnMargin;
+    const x = (Math.random() * 2 - 1) * halfArea;  
+    const z = (Math.random() * 2 - 1) * halfArea; 
+    const y = 12 + Math.random() ** 1.5 * 20; // Height above ground
+    const cloud = createCloud(x, y, z);
+    clouds.push(cloud);
+}
+
+// Update function to drift clouds
+function updateClouds(delta) {
+  for (const cloud of clouds) {
+      cloud.position.x += delta * 0.2; // Move right slowly
+      if (cloud.position.x > GRID_SIZE/2) cloud.position.x = -GRID_SIZE/2;
+  }
+}
 
 // Camera - orthographic top-down view so the horizon/sky can't be seen
 let camera;
@@ -684,18 +727,28 @@ function addExitBattlement(scene, pathCoords) {
   }
 }
 
-// Sun
-const sunGeometry = new THREE.CircleGeometry(1.5, 20, 15);
-const sunMaterial = new THREE.MeshStandardMaterial({ color: 0xFFF200 });
-const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+// Visual sun (optional, for seeing it in the sky)
+const sunRadius = 10;
+const sunGeo = new THREE.SphereGeometry(sunRadius, 100, 100);
+const sunMat = new THREE.MeshStandardMaterial({
+  color: 0xFFF200,
+  emissive: 0xFFFF88,   
+  emissiveIntensity: .05
+});
+const sun = new THREE.Mesh(sunGeo, sunMat);
+
+// Position sun in the sky
 const eastX = GRID_SIZE - 1;
 const eastZ = Math.floor(GRID_SIZE / 2);
-sun.position.set(
-  eastX - GRID_SIZE / 2, // x
-  20,                    // y
-  eastZ - GRID_SIZE / 2  // z
-);
+sun.position.set(eastX - GRID_SIZE / 2, 50, eastZ - GRID_SIZE / 2);
 scene.add(sun);
+
+// 2️⃣ Directional light to simulate sunlight
+const sunLight = new THREE.DirectionalLight(0xFFF2AA, 20); // color, intensity
+sunLight.position.copy(sun.position); // light comes from the sun
+sunLight.castShadow = true;           // optional: enable shadows
+scene.add(sunLight);
+
 
 // Player
 // Compute playable area bounds based on GRID_SIZE and tile placement (ground centered at 0)
@@ -1492,6 +1545,7 @@ const clock = new THREE.Clock();
 // Animate
 function animate() {
   requestAnimationFrame(animate);
+
   // If paused, skip game updates but continue rendering so overlays stay visible
   if (paused) {
     const activeCam = usingTopDown ? camera : fpCamera;
@@ -1500,8 +1554,55 @@ function animate() {
   }
   handlePlayerMovement();
   const delta = clock.getDelta(); // seconds since last frame
-
   player.update(delta);
+  player.updateHealthBar();
+  updateClouds(delta);
+
+  // Check for player death
+  if (player.health <= 0 && roundActive) {
+    roundActive = false; // stop the round
+
+    // Show game over overlay
+    if (!document.getElementById('gameOverOverlay')) {
+      const overlay = document.createElement('div');
+      overlay.id = 'gameOverOverlay';
+      overlay.style.position = 'fixed';
+      overlay.style.left = '0';
+      overlay.style.top = '0';
+      overlay.style.right = '0';
+      overlay.style.bottom = '0';
+      overlay.style.display = 'flex';
+      overlay.style.alignItems = 'center';
+      overlay.style.justifyContent = 'center';
+      overlay.style.background = 'rgba(0,0,0,0.8)';
+      overlay.style.color = 'white';
+      overlay.style.fontSize = '28px';
+      overlay.style.zIndex = 9999;
+
+      const box = document.createElement('div');
+      box.style.textAlign = 'center';
+      box.style.padding = '20px';
+      box.style.background = '#222';
+      box.style.borderRadius = '8px';
+      box.textContent = 'Game Over - Player Defeated';
+
+      const btn = document.createElement('button');
+      btn.textContent = 'Return to Menu';
+      btn.style.marginTop = '12px';
+      btn.addEventListener('click', () => {
+        try {
+          const ov = document.getElementById('gameOverOverlay');
+          if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+        } catch (e) {}
+        if (startMenu) startMenu.style.display = 'flex';
+        resetGameState(); // make sure your reset function also restores player HP
+      });
+
+      box.appendChild(btn);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+    }
+  }
 
   // Update first-person camera to follow player if active
   if (fpCamera && player) {
@@ -1524,7 +1625,11 @@ function animate() {
   }
   // Update enemies
   for (let i = enemies.length - 1; i >= 0; i--) {
-    enemies[i].update();
+    const enemy = enemies[i];  // assign the current enemy
+    enemy.update(fpCamera);     // update its position & health bar
+    enemy.attackPlayer(player); // attack the player if in range
+
+
     // Remove enemy if it reached the end -> damage castle
     if (enemies[i].currentStep >= enemies[i].pathCoords.length - 1) {
       // remove visual
