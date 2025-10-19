@@ -131,3 +131,38 @@ python -m http.server 8000
 - Sound effects for attacks and enemy death.
 - Convert repeated battlement meshes to InstancedMesh for performance.
 - Add automated smoke test (Puppeteer) to validate the Start Round → combat → round end flow.
+
+---
+
+### Iteration (2025-10-18): Features, bugfixes & polish
+
+- **Goal/Task/Rationale:** Ship a set of gameplay features and bugfixes requested during today's session: improve inventory reliability and apply flow, implement economy and tower costs, centralize constants, add weighted loot & diminishing gold returns, fix sword visibility and make player melee upgrades consistent via a single source of truth, and add UI flows (pause menu, endless mode, win condition, toasts).
+
+- **What I did?**
+  - Centralized attack constants into `game/constants.js` and updated `main.js` to import them.
+  - Implemented uid-based inventory entries and reservation semantics. Added `addInventoryEntryFromPickup`, `reserveInventoryUid`, `clearReservation`, and `removeInventoryByUid` in `game/loot.js` to avoid inventory loss when picking up multiple items.
+  - Added weighted random loot selection (`pickRandomLootKey`) and adjusted `sharpened_blade` rarity.
+  - Implemented `computeGoldMultiplier` (diminishing-returns formula, capped at +100%) and applied it in `addGold()` so `gold_hoard` tokens affect coin gains correctly.
+  - Added tower economy: `TOWER_COSTS` and `STARTING_GOLD` in `game/constants.js`. `buildTower()` now checks/deducts gold and tower buttons disable when unaffordable.
+  - Implemented Apply/Drop flows and toasts for inventory: player-targeted loot applies immediately, tower-targeted loot is stored and opened in a modal for selection. Inventory entries persist to `localStorage` immediately on pickup.
+  - Hardened `applyLootToPlayerOrTower` to properly resolve and persist `player.baseDamage` on `mul_playerDamage` upgrades and to enforce per-tower caps for tower upgrades.
+  - Made `player.baseDamage` the single source of truth for player melee damage; initialized it from `ATTACK_DAMAGE` and ensured all melee code reads this value.
+  - Replaced the simple box sword with a grouped blade+hilt, tuned materials for visibility, and fixed first-person rendering by adding the FP camera to the scene and fixing sword rest position/swing animation.
+  - Added pause menu overlay (Resume, End/Reset), Tab binding to toggle pause, an Endless Mode checkbox with on-screen indicator, and a campaign win overlay when clearing round 20 (skippable with Endless Mode).
+  - Fixed several runtime errors: moved ATTACK_* constants before use (then centralized), returned created tower from `buildTower()` to avoid undefined logs, and removed legacy `f` key binding.
+
+- **Files changed (high level):**
+  - `game/loot.js` — LOOT_DEFS updates, persistence helpers, pickRandomLootKey, computeGoldMultiplier, improved applyLootToPlayerOrTower.
+  - `game/player.js` — `baseDamage` SOT, sword Group (blade+hilt), rest position & swing animation, removed 'f' key binding.
+  - `game/constants.js` — added ATTACK_RANGE/ATTACK_DAMAGE/ATTACK_COOLDOWN, TOWER_COSTS, STARTING_GOLD, visual constants.
+  - `main.js` — imports updated, buildTower return, inventory apply flows, addGold uses computeGoldMultiplier, pause/endless/win overlays, pointer-lock & FP camera added to scene, tower button UI updates.
+  - `ui/toast.js` — used for toasts on pickup/apply/store.
+
+- **Response/Result:**
+  - Inventory no longer loses items when multiple pickups occur before applying. Player-targeted upgrades apply immediately and persist correctly. Sword is visible and swings in FP; upgrades that increase melee damage persist and affect swings. Gold hoard tokens now boost coin gains with diminishing returns. Tower building enforces costs.
+
+- **Your Evaluation:** done — major features implemented and integrated. Visual polish remains (sword look, hit VFX/SFX). (Contributors: Trevor Commons)
+
+---
+
+End of entry.

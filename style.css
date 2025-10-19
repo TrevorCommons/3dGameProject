@@ -136,3 +136,48 @@ canvas {
 }
 #lootTowerList { max-height: 220px; overflow-y: auto; margin: 8px 0; }
 #lootTowerList button { display:block; width:100%; margin-bottom:6px; }
+
+/* Inventory HUD (compact) and panel styles */
+.inventory-hud {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    background: rgba(0,0,0,0.45);
+    color: white;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    z-index: 1200;
+    cursor: pointer;
+}
+
+.inventory-panel {
+    display: none;
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    width: 260px;
+    background: rgba(0,0,0,0.85);
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    z-index: 1300;
+}
+.inventory-panel h4 { margin: 0 0 8px 0; font-size: 14px; }
+.inventory-panel .inv-row { margin-bottom: 6px; display:flex; align-items:center; justify-content:space-between; }
+.inventory-panel button { font-size: 12px; }
+
+/* Toast notifications */
+.game-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 14%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.85);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    z-index: 1500;
+    opacity: 1;
+    transition: opacity 220ms ease;
+}

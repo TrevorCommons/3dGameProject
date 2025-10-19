@@ -10,6 +10,9 @@
   💎 Gold: <span id="gold">100</span> | 🏰 Castle: <span id="castleHealth">10</span> | 🧟 Wave: <span id="wave">1</span> | Enemies: <span id="enemiesRemaining">0</span>
         <button id="cameraToggle">Toggle Camera (C)</button>
         <button id="startRound">Start Round (R)</button>
+  <label style="margin-left:8px; font-size:0.9em;"><input type="checkbox" id="endlessModeCheckbox"> Endless Mode</label>
+  <span id="endlessIndicator" style="margin-left:8px; font-weight:bold; color:#ffd700; display:none;">Endless ON</span>
+  <button id="pauseBtn" style="margin-left:12px;">Pause (Tab)</button>
         <div id="waveProgress" style="display:inline-block; vertical-align:middle; margin-left:12px;">
           <div id="waveProgressBar"></div>
         </div>
@@ -36,6 +39,15 @@
       <div id="persistentTowersList"></div>
     </div>
 
+        <!-- Inventory panel (hidden by default) -->
+        <div id="inventoryPanel" class="inventory-panel">
+            <h4>Inventory</h4>
+            <div id="inventoryList">(empty)</div>
+            <div style="margin-top:8px; text-align:right;">
+              <button id="inventoryClear">Clear</button>
+            </div>
+        </div>
+
         <!-- Loot apply modal -->
         <div id="lootModal" style="display:none;">
             <div id="lootModalContent">
@@ -45,6 +57,15 @@
             </div>
         </div>
     </div> <!-- end #ui -->
+
+    <!-- Pause overlay -->
+    <div id="pauseOverlay" style="display:none; position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:10000; align-items:center; justify-content:center;">
+      <div style="background:#111; color:white; padding:20px; border-radius:8px; text-align:center;">
+        <h2>Game Paused</h2>
+        <button id="resumeBtn">Resume</button>
+        <button id="endGameBtn" style="margin-left:8px;">End / Reset Game</button>
+      </div>
+    </div>
 
     <!-- Crosshair for first-person -->
     <div id="crosshair" style="display:none;">+</div>
