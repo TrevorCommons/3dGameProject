@@ -3,6 +3,12 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.m
 export class Player {
     constructor(camera, bounds = null, defaultBaseDamage = 4) {
         this.camera = camera; // store the camera reference for first-person usage
+        // Player health
+        this.maxHealth = 100;
+        this.health = this.maxHealth;
+        this.lastDamageTime = 0;  // store last time damage occurred
+        this.regenDelay = 3;      // seconds after last damage before regen
+        this.regenRate = 20;   
 
         // Player mesh
         const geometry = new THREE.BoxGeometry(1, 2, 1);
@@ -42,13 +48,23 @@ export class Player {
         this.swordCooldown = 0.5; // seconds
         this.lastSwingTime = 0;
         this.swingDuration = 0.2; 
-        this.swordRange = 5;
-    // Canonical melee damage value (single source of truth). Initialised from caller.
-    this.baseDamage = defaultBaseDamage;
+        this.swordRange = 3;
+         // Canonical melee damage value (single source of truth). Initialised from caller.
+        this.baseDamage = defaultBaseDamage;
 
         // Swing state
         this.swinging = false;
         this.swingElapsed = 0;
+    
+        // Listen for attack key (e.g. left mouse button or F)
+        window.addEventListener('mousedown', (e) => {
+            // Left click only
+            if (e.button === 0) this.startSwing();
+        });
+
+        window.addEventListener('keydown', (e) => {
+         if (e.key.toLowerCase() === 'f') this.startSwing();
+        });
 
         // Enemies reference (set in main)
         this.enemies = [];
@@ -124,6 +140,26 @@ export class Player {
         }
     }
 
+    updateHealthBar() {
+        const bar = document.getElementById('health-bar');
+        if (bar) {
+          const percent = Math.max(0, this.health / this.maxHealth);
+          bar.style.width = `${percent * 100}%`;
+      
+          // Change color from green → red
+          if (percent > 0.5) bar.style.backgroundColor = '#00ff00';
+          else if (percent > 0.25) bar.style.backgroundColor = '#ffff00';
+          else bar.style.backgroundColor = '#ff0000';
+        }
+      }
+
+      takeDamage(amount) {
+        this.health -= amount;
+        this.lastDamageTime = performance.now() / 1000; 
+        if (this.health < 0) this.health = 0;
+    }
+      
+    
     update(delta) {
         if (this.swinging) {
             this.swingElapsed += delta;
@@ -143,6 +179,13 @@ export class Player {
                 pos.z += dz;
                 this.sword.position.copy(pos);
             }
+        }
+         // HEALTH REGEN LOGIC
+         const now = performance.now() / 1000;
+         const timeSinceDamage = now - this.lastDamageTime;
+         if (timeSinceDamage > this.regenDelay && this.health < this.maxHealth) {
+             this.health += this.regenRate * delta;
+             if (this.health > this.maxHealth) this.health = this.maxHealth;
         }
     }
 }

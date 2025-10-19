@@ -181,3 +181,25 @@ canvas {
     opacity: 1;
     transition: opacity 220ms ease;
 }
+
+#health-container {
+    position: fixed;
+    bottom: 30px;       /* distance from bottom of screen */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 25px;
+    background-color: #333;
+    border: 2px solid #555;
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 1000;      /* make sure it’s above the 3D canvas */
+  }
+  
+  #health-bar {
+    width: 100%;
+    height: 100%;
+    background-color: #59ff00; 
+    transition: width 0.25s ease;
+  }
+  

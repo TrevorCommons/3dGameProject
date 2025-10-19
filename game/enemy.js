@@ -132,6 +132,33 @@ export class Enemy {
 
     return { coins, loot };
   }
+
+  attackPlayer(player) {
+    if (this.dead) return;
+  
+    const dx = player.mesh.position.x - this.mesh.position.x;
+    const dz = player.mesh.position.z - this.mesh.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+  
+    // Attack range and cooldown
+    const attackRange = 2;
+    const attackCooldown = 1.2; // seconds
+    const now = performance.now() / 1000;
+  
+    if (dist <= attackRange) {
+      if (!this.lastAttackTime || now - this.lastAttackTime >= attackCooldown) {
+        this.lastAttackTime = now;
+        if (typeof player.takeDamage === 'function') {
+          player.takeDamage(5); // deal 10 damage per hit
+        } else {
+          // fallback: direct damage
+          player.health -= 10;
+          player.updateHealthBar();
+        }
+      }
+    }
+  }
+  
 }
 
  
