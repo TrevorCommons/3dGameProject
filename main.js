@@ -583,13 +583,25 @@ function addEntranceRangeWithCave(scene, pathCoords) {
 
 addEntranceRangeWithCave(scene, pathCoords);
 
-// Castle
-const castleGeometry = new THREE.BoxGeometry(3, 3, 3);
-const castleMaterial = new THREE.MeshStandardMaterial({ color: 0x777777 });
-const castle = new THREE.Mesh(castleGeometry, castleMaterial);
+// Create a group for the castle
+const castle = new THREE.Group();
+
+// Main keep (taller)
+const keepGeo = new THREE.BoxGeometry(10, 5, 4); // height doubled
+const keepMat = new THREE.MeshStandardMaterial({ color: 0x777777 });
+const keep = new THREE.Mesh(keepGeo, keepMat);
+keep.position.y = 3; // half of new height
+castle.add(keep);
+
+// Position castle at end of path
 const endTile = pathCoords[pathCoords.length - 1];
-castle.position.set(endTile.x - GRID_SIZE / 2, 1.5, endTile.y - GRID_SIZE / 2);
+castle.position.set(endTile.x - GRID_SIZE / 2, 0, endTile.y - GRID_SIZE / 2);
+
 scene.add(castle);
+
+
+// Add exit battlement and corner towers aligned to the path end
+addExitBattlement(scene, pathCoords);
 
 // Add exit battlement and corner towers aligned to the path end
 addExitBattlement(scene, pathCoords);
