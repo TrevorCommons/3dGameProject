@@ -212,35 +212,42 @@ export class GameState {
     const player = this.players.get(playerId);
     if (!player) return;
 
-    const playerRadius = 1; // approximate radius of player for collision
+    const playerRadius = 2;   // Base collision radius
+    const verticalThreshold = 2; // Only push if roughly same height
+    const repulsionFactor = 0.5; // Adjusts strength of exponential push
 
-    // Check collision with all other players
     for (let [otherId, other] of this.players) {
         if (otherId === playerId) continue;
 
+        // Vector difference
         const dx = newPosition.x - other.position.x;
         const dz = newPosition.z - other.position.z;
+        const dy = newPosition.y - other.position.y;
+
         const distance = Math.sqrt(dx*dx + dz*dz);
 
-        if (distance < playerRadius * 2) {
-            // Collision detected - push player away along collision vector
-            const overlap = (playerRadius * 2 - distance);
+        if (distance < playerRadius * 2 && Math.abs(dy) < verticalThreshold) {
+            const overlap = playerRadius * 2 - distance;
+
+            // Exponential push based on overlap
+            const pushStrength = Math.exp(overlap) * repulsionFactor;
+
             const angle = Math.atan2(dz, dx);
+            const pushX = Math.cos(angle) * pushStrength * 0.5;
+            const pushZ = Math.sin(angle) * pushStrength * 0.5;
 
-            // Push current player away
-            newPosition.x += Math.cos(angle) * overlap * 0.5;
-            newPosition.z += Math.sin(angle) * overlap * 0.5;
+            newPosition.x += pushX;
+            newPosition.z += pushZ;
 
-            // Push other player slightly back for realism
-            other.position.x -= Math.cos(angle) * overlap * 0.5;
-            other.position.z -= Math.sin(angle) * overlap * 0.5;
+            other.position.x -= pushX;
+            other.position.z -= pushZ;
         }
     }
 
-    // Update player's position and rotation
     player.position = newPosition;
     player.rotation = rotation;
 }
+
 
   getPlayers() {
     const playerArray = [];
