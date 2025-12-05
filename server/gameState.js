@@ -224,14 +224,40 @@ export class GameState {
     this.players.delete(playerId);
   }
   
-  updatePlayerPosition(playerId, position, rotation) {
+  updatePlayerPosition(playerId, newPosition, rotation) {
     const player = this.players.get(playerId);
-    if (player) {
-      player.position = position;
-      player.rotation = rotation;
+    if (!player) return;
+
+    const playerRadius = 1; // approximate radius of player for collision
+
+    // Check collision with all other players
+    for (let [otherId, other] of this.players) {
+        if (otherId === playerId) continue;
+
+        const dx = newPosition.x - other.position.x;
+        const dz = newPosition.z - other.position.z;
+        const distance = Math.sqrt(dx*dx + dz*dz);
+
+        if (distance < playerRadius * 2) {
+            // Collision detected - push player away along collision vector
+            const overlap = (playerRadius * 2 - distance);
+            const angle = Math.atan2(dz, dx);
+
+            // Push current player away
+            newPosition.x += Math.cos(angle) * overlap * 0.5;
+            newPosition.z += Math.sin(angle) * overlap * 0.5;
+
+            // Push other player slightly back for realism
+            other.position.x -= Math.cos(angle) * overlap * 0.5;
+            other.position.z -= Math.sin(angle) * overlap * 0.5;
+        }
     }
-  }
-  
+
+    // Update player's position and rotation
+    player.position = newPosition;
+    player.rotation = rotation;
+}
+
   getPlayers() {
     const playerArray = [];
     this.players.forEach((data, id) => {
