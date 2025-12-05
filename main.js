@@ -201,7 +201,37 @@ function createCloud(x, y, z) {
   return group;
 }
 
-// Create clouds
+// Function to create cloud from server data
+function createCloudFromData(cloudData) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+  
+  for (const sphereData of cloudData.spheres) {
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(sphereData.radius, 16, 16), mat);
+    sphere.position.set(sphereData.x, sphereData.y, sphereData.z);
+    group.add(sphere);
+  }
+  
+  group.position.set(cloudData.x, cloudData.y, cloudData.z);
+  group.scale.set(cloudData.scale, cloudData.scale, cloudData.scale);
+  scene.add(group);
+  return group;
+}
+
+// Function to rebuild clouds from server data
+function rebuildCloudsFromServer(cloudPositions) {
+  // Remove existing clouds
+  clouds.forEach(cloud => scene.remove(cloud));
+  clouds.length = 0;
+  
+  // Create clouds from server data
+  cloudPositions.forEach(cloudData => {
+    const cloud = createCloudFromData(cloudData);
+    clouds.push(cloud);
+  });
+}
+
+// Create clouds (will be replaced in multiplayer)
 for (let i = 0; i < 100; i++) {
     const halfArea = GRID_SIZE / 2 + spawnMargin;
     const x = (Math.random() * 2 - 1) * halfArea;  
@@ -391,25 +421,17 @@ function spawnWave(numEnemies, enemySpawns = null) {
     const enemySpeed = Math.min(WAVE_CONFIG.baseSpeed + WAVE_CONFIG.speedIncreasePerWave * Math.max(0, waveNumber - 1), WAVE_CONFIG.maxSpeed);
     const lootChance = Math.min(WAVE_CONFIG.baseLootChance + WAVE_CONFIG.lootChancePerWave * Math.max(0, waveNumber - 1), WAVE_CONFIG.maxLootChance);
     
-    // Choose random loot carriers for this wave
-    const chosenLootKey = pickRandomLootKey();
-    const carryIndex = Math.floor(Math.random() * finalCount);
-    const carryIndices = [carryIndex];
-    if (WAVE_CONFIG.extraPowerupEveryN > 0 && waveNumber % WAVE_CONFIG.extraPowerupEveryN === 0) {
-      if (Math.random() < WAVE_CONFIG.extraPowerupChance) {
-        let extraIdx = Math.floor(Math.random() * finalCount);
-        let attempts = 0;
-        while (extraIdx === carryIndex && attempts < 12) { extraIdx = Math.floor(Math.random() * finalCount); attempts++; }
-        if (extraIdx !== carryIndex) carryIndices.push(extraIdx);
-      }
-    }
-    
+    // Use server-provided loot carrier data
     for (let i = 0; i < finalCount; i++) {
       const spawnData = enemySpawns[i];
-      const carriesLootId = carryIndices.includes(i) ? chosenLootKey : null;
+      const carriesLootId = spawnData.carriesLoot; // Server determines who carries loot
       const enemy = new Enemy(pathCoords, scene, { carriesLootId, maxHealth: enemyHealth, speed: enemySpeed, lootChance });
       enemy.id = spawnData.id; // Use server-provided ID
       enemy.progress = -spawnData.spawnDelay;
+      
+      if (typeof caveSpawnPos !== 'undefined' && caveSpawnPos) {
+        enemy.mesh.position.set(caveSpawnPos.x, caveSpawnPos.y, caveSpawnPos.z);
+      }
       enemies.push(enemy);
     }
     
@@ -484,6 +506,35 @@ function updateWaveUI() {
   }
 }
 
+// Store decoration meshes for cleanup
+let decorationMeshes = [];
+
+// Function to build decorations from server data
+function buildDecorationsFromServer(decorations) {
+  // Remove existing decorations
+  decorationMeshes.forEach(mesh => scene.remove(mesh));
+  decorationMeshes = [];
+  
+  const treeGeometry = new THREE.ConeGeometry(2, 5, 12);
+  const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x006400 });
+  const rockGeometry = new THREE.DodecahedronGeometry(0.8);
+  const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+  
+  decorations.forEach(dec => {
+    if (dec.type === 'tree') {
+      const tree = new THREE.Mesh(treeGeometry, treeMaterial);
+      tree.position.set(dec.x, dec.y, dec.z);
+      scene.add(tree);
+      decorationMeshes.push(tree);
+    } else if (dec.type === 'rock') {
+      const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+      rock.position.set(dec.x, dec.y, dec.z);
+      scene.add(rock);
+      decorationMeshes.push(rock);
+    }
+  });
+}
+
 // need to add some substance to the map (trees, rocks, castle, etc.)
 function addDecorations(scene, grid) {
   const treeGeometry = new THREE.ConeGeometry(2, 5, 12);
@@ -526,10 +577,12 @@ function addDecorations(scene, grid) {
         const tree = new THREE.Mesh(treeGeometry, treeMaterial);
         tree.position.set((x - GRID_SIZE/2) * TILE_SIZE + TILE_SIZE/2, 0.75, (y - GRID_SIZE/2) * TILE_SIZE + TILE_SIZE/2);
         scene.add(tree);
+        decorationMeshes.push(tree);
       } else if (rand < 0.08) {
         const rock = new THREE.Mesh(rockGeometry, rockMaterial);
         rock.position.set(x - GRID_SIZE / 2, 0.25, y - GRID_SIZE / 2);
         scene.add(rock);
+        decorationMeshes.push(rock);
       }
     }
   }
@@ -2215,6 +2268,18 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       if (initData.gameState.pathCoords) {
         console.log('Rebuilding map from server path data');
         rebuildPathFromServer(initData.gameState.pathCoords);
+      }
+      
+      // Rebuild decorations using server's data
+      if (initData.gameState.decorations) {
+        console.log('Rebuilding decorations from server data');
+        buildDecorationsFromServer(initData.gameState.decorations);
+      }
+      
+      // Rebuild clouds using server's data
+      if (initData.gameState.cloudPositions) {
+        console.log('Rebuilding clouds from server data');
+        rebuildCloudsFromServer(initData.gameState.cloudPositions);
       }
     }
     

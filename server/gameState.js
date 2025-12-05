@@ -15,6 +15,12 @@ export class GameState {
     // Generate path once on server
     this.pathCoords = this.generatePath();
     
+    // Generate decorations (trees, rocks) once on server
+    this.decorations = this.generateDecorations();
+    
+    // Generate cloud positions once on server
+    this.cloudPositions = this.generateCloudPositions();
+    
     // Available player colors
     this.availableColors = [
       0xff0000, // Red
@@ -86,6 +92,88 @@ export class GameState {
     }
     
     return pathCoords;
+  }
+  
+  generateDecorations() {
+    const GRID_SIZE = 50;
+    const TILE_SIZE = 1;
+    const decorations = [];
+    const avoidRadius = 3;
+    
+    // Build grid from pathCoords
+    const grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+    for (const coord of this.pathCoords) {
+      grid[coord.y][coord.x] = 1;
+    }
+    
+    const pathTiles = this.pathCoords;
+    
+    const isNearPath = (x, y) => {
+      for (const tile of pathTiles) {
+        const dx = x - tile.x;
+        const dy = y - tile.y;
+        if (Math.sqrt(dx * dx + dy * dy) <= avoidRadius) {
+          return true;
+        }
+      }
+      return false;
+    };
+    
+    for (let y = 0; y < grid.length; y++) {
+      for (let x = 0; x < grid[y].length; x++) {
+        if (grid[y][x] === 1) continue;
+        if (isNearPath(x, y)) continue;
+        
+        const rand = Math.random();
+        if (rand < 0.05) {
+          decorations.push({
+            type: 'tree',
+            x: (x - GRID_SIZE/2) * TILE_SIZE + TILE_SIZE/2,
+            y: 0.75,
+            z: (y - GRID_SIZE/2) * TILE_SIZE + TILE_SIZE/2
+          });
+        } else if (rand < 0.08) {
+          decorations.push({
+            type: 'rock',
+            x: (x - GRID_SIZE/2) * TILE_SIZE + TILE_SIZE/2,
+            y: 0.4,
+            z: (y - GRID_SIZE/2) * TILE_SIZE + TILE_SIZE/2
+          });
+        }
+      }
+    }
+    
+    return decorations;
+  }
+  
+  generateCloudPositions() {
+    const GRID_SIZE = 50;
+    const spawnMargin = 5;
+    const clouds = [];
+    
+    for (let i = 0; i < 100; i++) {
+      const halfArea = GRID_SIZE / 2 + spawnMargin;
+      const x = (Math.random() * 2 - 1) * halfArea;
+      const z = (Math.random() * 2 - 1) * halfArea;
+      const y = 12 + Math.random() ** 1.5 * 20;
+      
+      // Generate cloud sphere data
+      const spheres = [];
+      for (let j = 0; j < 5; j++) {
+        spheres.push({
+          radius: Math.random() * 1.5 + 0.5,
+          x: Math.random() * 2 - 1,
+          y: Math.random() * 0.5,
+          z: Math.random() * 2 - 1
+        });
+      }
+      
+      const scale = 0.5 + Math.random() * 1.5;
+      
+      clouds.push({ x, y, z, scale, spheres });
+    }
+    
+    return clouds;
   }
   
   getNextPlayerColor() {
@@ -244,17 +332,42 @@ export class GameState {
       roundInProgress: this.roundInProgress,
       towers: Array.from(this.towers.entries()).map(([id, tower]) => ({ id, ...tower })),
       enemies: Array.from(this.enemies.entries()).map(([id, enemy]) => ({ id, ...enemy })),
-      pathCoords: this.pathCoords
+      pathCoords: this.pathCoords,
+      decorations: this.decorations,
+      cloudPositions: this.cloudPositions
     };
   }
   
   generateEnemySpawns(numEnemies, waveNumber) {
     const spawns = [];
+    
+    // Determine loot carriers (same logic as client)
+    const lootKeys = ['attackBoost', 'healthBoost', 'speedBoost', 'goldBoost', 'rangeBoost'];
+    const chosenLootKey = lootKeys[Math.floor(Math.random() * lootKeys.length)];
+    const carryIndex = Math.floor(Math.random() * numEnemies);
+    const carryIndices = [carryIndex];
+    
+    // Extra powerup every 5 waves
+    if (waveNumber % 5 === 0) {
+      if (Math.random() < 0.45) {
+        let extraIdx = Math.floor(Math.random() * numEnemies);
+        let attempts = 0;
+        while (extraIdx === carryIndex && attempts < 12) {
+          extraIdx = Math.floor(Math.random() * numEnemies);
+          attempts++;
+        }
+        if (extraIdx !== carryIndex) carryIndices.push(extraIdx);
+      }
+    }
+    
     for (let i = 0; i < numEnemies; i++) {
       const enemyId = `enemy_${this.enemyIdCounter++}`;
+      const carriesLoot = carryIndices.includes(i) ? chosenLootKey : null;
+      
       spawns.push({
         id: enemyId,
-        spawnDelay: i * 0.5 // stagger spawning
+        spawnDelay: i * 0.5,
+        carriesLoot: carriesLoot
       });
     }
     return spawns;
