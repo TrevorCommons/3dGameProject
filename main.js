@@ -1689,16 +1689,26 @@ let towerLimitPerRound = 1;
 
 
 function buildTower(type, x, y) {
-  if (towersBuiltThisRound >= towerLimitPerRound) return; // limit per round
   type = type.toLowerCase(); // normalize
 
-  // In multiplayer mode, send request to server instead of building directly
+  // In multiplayer mode, check limit and send request to server
   if (isMultiplayer && multiplayerClient) {
+    if (roundActive && towersPlacedThisRound >= towerLimitThisRound) {
+      showToast(`Tower limit reached (${towerLimitThisRound} per round)`);
+      return;
+    }
     const worldX = (x - GRID_SIZE/2) + 0.5;
     const worldZ = (y - GRID_SIZE/2) + 0.5;
     const typeCap = type.charAt(0).toUpperCase() + type.slice(1); // Capitalize for server
     multiplayerClient.sendPlaceTower(typeCap, { x: worldX, y: 0.5, z: worldZ });
     return; // Server will handle validation and broadcast
+  }
+  
+  // Single-player tower limit check
+  const singlePlayerLimit = 2;
+  if (roundActive && towersPlacedThisRound >= singlePlayerLimit) {
+    showToast(`Tower limit reached (${singlePlayerLimit} per round)`);
+    return;
   }
 
   // Single-player logic
@@ -1721,7 +1731,9 @@ function buildTower(type, x, y) {
   gold -= cost;
   if (goldEl) goldEl.textContent = gold.toString();
   towers.push(tower);
-  towersBuiltThisRound++;
+  if (roundActive) {
+    towersPlacedThisRound++;
+  }
   showToast(`Built ${type} for ${cost}g`);
   // refresh tower button states
   try { refreshTowerButtons(); } catch (e) {}
@@ -2236,12 +2248,7 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       const tower = createTowerFromServer(towerId, type, position);
       if (tower) {
         showToast(`${type} tower placed!`);
-        
-        // Update tower placement counter
-        if (roundActive) {
-          towersPlacedThisRound++;
-          updateTowerLimitUI();
-        }
+        // Tower placement counter is updated via onTowerPlacementUpdate event from server
       }
     };
     
