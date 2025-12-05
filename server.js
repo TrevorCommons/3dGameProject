@@ -68,10 +68,17 @@ io.on('connection', (socket) => {
         id: result.towerId,
         type: data.type,
         position: data.position,
-        placedBy: socket.id
+        placedBy: socket.id,
+        towersRemaining: result.towersRemaining
       });
       // Update gold for all players
       io.emit('goldUpdate', { gold: gameState.gold });
+      
+      // Broadcast tower placement status to all
+      io.emit('towerPlacementUpdate', {
+        towersPlaced: gameState.towersPlacedThisRound,
+        towerLimit: gameState.towerLimitThisRound
+      });
     } else {
       // Send error only to the player who tried to place
       socket.emit('towerPlaceFailed', { reason: result.reason });

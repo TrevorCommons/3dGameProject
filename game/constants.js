@@ -37,6 +37,37 @@ export const TOWER_COSTS = {
 // Starting gold for player (default shown in index.html too)
 export const STARTING_GOLD = 100;
 
+// Multiplayer scaling constants
+export const MULTIPLAYER_SCALING = {
+  startingGoldBonus: 50, // Extra gold in multiplayer
+  castleHealthPerPlayer: 5, // Added per player
+  baseCastleHealth: 10,
+  
+  // Enemy count multipliers by player count
+  enemyCountMultipliers: {
+    1: 1.0,
+    2: 1.5,
+    3: 2.0,
+    4: 2.5
+  },
+  
+  // Enemy health multipliers by player count
+  enemyHealthMultipliers: {
+    1: 1.0,
+    2: 1.2,
+    3: 1.35,
+    4: 1.5
+  },
+  
+  // Tower placement limits per round
+  singlePlayerTowerLimit: 2,
+  multiplayerTowerLimitPerPlayer: 1,
+  maxTowerLimit: 4,
+  
+  // Gold reward bonus for multiplayer
+  goldRewardMultiplier: 1.1
+};
+
 // Player attack constants
 export const ATTACK_RANGE = 1.8; // world units
 export const ATTACK_DAMAGE = 3.5; // nerfed slightly from 4

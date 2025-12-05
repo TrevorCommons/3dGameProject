@@ -4,13 +4,15 @@ export class GameState {
     this.players = new Map(); // playerId -> {position, rotation, color, health}
     this.towers = new Map(); // towerId -> {type, position, stats, placedBy}
     this.enemies = new Map(); // enemyId -> {position, health, maxHealth}
-    this.gold = 100; // Shared gold pool
-    this.castleHealth = 10;
+    this.gold = 150; // Shared gold pool (multiplayer starting amount)
+    this.castleHealth = 10; // Will scale based on player count
     this.wave = 1;
     this.roundInProgress = false;
     this.enemiesInWave = 0;
     this.towerIdCounter = 0;
     this.enemyIdCounter = 0;
+    this.towersPlacedThisRound = 0;
+    this.towerLimitThisRound = 0;
     
     // Generate path once on server
     this.pathCoords = this.generatePath();
@@ -194,6 +196,20 @@ export class GameState {
       color: color,
       health: 100
     });
+    
+    // Update castle health based on player count
+    this.updateCastleHealthForPlayerCount();
+  }
+  
+  updateCastleHealthForPlayerCount() {
+    const playerCount = this.players.size;
+    this.castleHealth = 10 + (5 * playerCount); // 10 base + 5 per player
+  }
+  
+  getTowerLimitForRound() {
+    const playerCount = this.players.size;
+    if (playerCount === 1) return 2; // Single player gets 2 towers
+    return Math.min(playerCount, 4); // Multiplayer: 1 per player, max 4
   }
   
   removePlayer(playerId) {
@@ -225,11 +241,16 @@ export class GameState {
   }
   
   placeTower(type, position, playerId) {
+    // Check tower placement limit for this round
+    if (this.roundInProgress && this.towersPlacedThisRound >= this.towerLimitThisRound) {
+      return { success: false, reason: 'Tower limit reached for this round' };
+    }
+    
     // Tower costs (should match client-side constants)
     const costs = {
       'Healer': 30,
-      'Mage': 40,
-      'Archer': 25
+      'Mage': 50,
+      'Archer': 40
     };
     
     const cost = costs[type] || 30;
@@ -316,7 +337,22 @@ export class GameState {
   
   startRound() {
     this.roundInProgress = true;
-    this.enemiesInWave = this.wave * 3 + 2; // Example formula
+    
+    // Reset tower placement counter and set limit
+    this.towersPlacedThisRound = 0;
+    this.towerLimitThisRound = this.getTowerLimitForRound();
+    
+    // Calculate scaled enemy count based on player count
+    const playerCount = Math.max(1, this.players.size);
+    const baseEnemies = Math.floor(3 + (this.wave - 1) * 0.6); // Base formula
+    
+    // Apply player count multiplier
+    let countMultiplier = 1.0;
+    if (playerCount === 2) countMultiplier = 1.5;
+    else if (playerCount === 3) countMultiplier = 2.0;
+    else if (playerCount >= 4) countMultiplier = 2.5;
+    
+    this.enemiesInWave = Math.floor(baseEnemies * countMultiplier);
   }
   
   endRound() {
@@ -334,12 +370,22 @@ export class GameState {
       enemies: Array.from(this.enemies.entries()).map(([id, enemy]) => ({ id, ...enemy })),
       pathCoords: this.pathCoords,
       decorations: this.decorations,
-      cloudPositions: this.cloudPositions
+      cloudPositions: this.cloudPositions,
+      playerCount: this.players.size,
+      towersPlacedThisRound: this.towersPlacedThisRound,
+      towerLimitThisRound: this.towerLimitThisRound
     };
   }
   
   generateEnemySpawns(numEnemies, waveNumber) {
     const spawns = [];
+    
+    // Calculate health multiplier based on player count
+    const playerCount = Math.max(1, this.players.size);
+    let healthMultiplier = 1.0;
+    if (playerCount === 2) healthMultiplier = 1.2;
+    else if (playerCount === 3) healthMultiplier = 1.35;
+    else if (playerCount >= 4) healthMultiplier = 1.5;
     
     // Determine loot carriers (same logic as client)
     const lootKeys = ['attackBoost', 'healthBoost', 'speedBoost', 'goldBoost', 'rangeBoost'];
@@ -367,7 +413,8 @@ export class GameState {
       spawns.push({
         id: enemyId,
         spawnDelay: i * 0.5,
-        carriesLoot: carriesLoot
+        carriesLoot: carriesLoot,
+        healthMultiplier: healthMultiplier
       });
     }
     return spawns;

@@ -13,6 +13,9 @@ import { MultiplayerClient } from './game/multiplayerClient.js';
 let multiplayerClient = null;
 let isMultiplayer = false;
 let otherPlayerMeshes = new Map(); // playerId -> THREE.Mesh
+let towersPlacedThisRound = 0;
+let towerLimitThisRound = 0;
+let playerCount = 1;
 
 // Tower selection
 let selectedTowerType = null; // "Healer", "Mage", "Archer"
@@ -417,7 +420,7 @@ function spawnWave(numEnemies, enemySpawns = null) {
     currentWaveTotal = finalCount;
     
     // compute per-enemy stats
-    const enemyHealth = Math.min(WAVE_CONFIG.baseHealth * Math.pow(WAVE_CONFIG.healthScalePerWave, Math.max(0, waveNumber - 1)), WAVE_CONFIG.maxHealth);
+    let baseHealth = Math.min(WAVE_CONFIG.baseHealth * Math.pow(WAVE_CONFIG.healthScalePerWave, Math.max(0, waveNumber - 1)), WAVE_CONFIG.maxHealth);
     const enemySpeed = Math.min(WAVE_CONFIG.baseSpeed + WAVE_CONFIG.speedIncreasePerWave * Math.max(0, waveNumber - 1), WAVE_CONFIG.maxSpeed);
     const lootChance = Math.min(WAVE_CONFIG.baseLootChance + WAVE_CONFIG.lootChancePerWave * Math.max(0, waveNumber - 1), WAVE_CONFIG.maxLootChance);
     
@@ -425,6 +428,10 @@ function spawnWave(numEnemies, enemySpawns = null) {
     for (let i = 0; i < finalCount; i++) {
       const spawnData = enemySpawns[i];
       const carriesLootId = spawnData.carriesLoot; // Server determines who carries loot
+      
+      // Apply server's health multiplier
+      const enemyHealth = spawnData.healthMultiplier ? baseHealth * spawnData.healthMultiplier : baseHealth;
+      
       const enemy = new Enemy(pathCoords, scene, { carriesLootId, maxHealth: enemyHealth, speed: enemySpeed, lootChance });
       enemy.id = spawnData.id; // Use server-provided ID
       enemy.progress = -spawnData.spawnDelay;
@@ -503,6 +510,34 @@ function updateWaveUI() {
     const remaining = enemies.length;
     const pct = currentWaveTotal > 0 ? ((currentWaveTotal - remaining) / currentWaveTotal) * 100 : 0;
     waveProgressBar.style.width = pct + '%';
+  }
+}
+
+function updateTowerLimitUI() {
+  if (!isMultiplayer || !roundActive) return;
+  
+  const remaining = towerLimitThisRound - towersPlacedThisRound;
+  const towerLimitEl = document.getElementById('towerLimitDisplay');
+  
+  if (towerLimitEl) {
+    towerLimitEl.textContent = `Towers: ${remaining}/${towerLimitThisRound}`;
+    towerLimitEl.style.display = roundActive ? 'block' : 'none';
+  } else {
+    // Create the element if it doesn't exist
+    const el = document.createElement('div');
+    el.id = 'towerLimitDisplay';
+    el.style.position = 'fixed';
+    el.style.top = '120px';
+    el.style.right = '20px';
+    el.style.color = 'white';
+    el.style.fontSize = '18px';
+    el.style.fontWeight = 'bold';
+    el.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    el.style.padding = '10px 15px';
+    el.style.borderRadius = '5px';
+    el.style.zIndex = '1000';
+    el.textContent = `Towers: ${remaining}/${towerLimitThisRound}`;
+    document.body.appendChild(el);
   }
 }
 
@@ -2201,6 +2236,12 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       const tower = createTowerFromServer(towerId, type, position);
       if (tower) {
         showToast(`${type} tower placed!`);
+        
+        // Update tower placement counter
+        if (roundActive) {
+          towersPlacedThisRound++;
+          updateTowerLimitUI();
+        }
       }
     };
     
@@ -2215,6 +2256,12 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       updateCastleHealthUI();
     };
     
+    multiplayerClient.onTowerPlacementUpdate = (towersPlaced, towerLimit) => {
+      towersPlacedThisRound = towersPlaced;
+      towerLimitThisRound = towerLimit;
+      updateTowerLimitUI();
+    };
+    
     multiplayerClient.onRoundStarted = (wave, enemiesCount, enemySpawns) => {
       console.log('Round started:', wave, 'with', enemiesCount, 'enemies');
       showToast(`Wave ${wave} starting!`);
@@ -2224,6 +2271,12 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
         roundActive = true;
         setUsingTopDown(false);
         waveNumber = wave;
+        
+        // Reset tower placement counter
+        towersPlacedThisRound = 0;
+        towerLimitThisRound = playerCount === 1 ? 2 : Math.min(playerCount, 4);
+        updateTowerLimitUI();
+        
         // Pass enemySpawns to spawnWave so all clients spawn same enemies
         spawnWave(enemiesCount, enemySpawns);
       }
@@ -2264,6 +2317,12 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       castleHealth = initData.gameState.castleHealth;
       updateCastleHealthUI();
       
+      // Initialize tower placement tracking
+      playerCount = initData.gameState.playerCount || 1;
+      towerLimitThisRound = initData.gameState.towerLimitThisRound || 0;
+      towersPlacedThisRound = initData.gameState.towersPlacedThisRound || 0;
+      updateTowerLimitUI();
+      
       // Rebuild map using server's path
       if (initData.gameState.pathCoords) {
         console.log('Rebuilding map from server path data');
@@ -2281,6 +2340,12 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
         console.log('Rebuilding clouds from server data');
         rebuildCloudsFromServer(initData.gameState.cloudPositions);
       }
+      
+      // Initialize tower placement tracking
+      playerCount = initData.gameState.playerCount || 1;
+      towerLimitThisRound = initData.gameState.towerLimitThisRound || 0;
+      towersPlacedThisRound = initData.gameState.towersPlacedThisRound || 0;
+      updateTowerLimitUI();
     }
     
     // Create meshes for existing players

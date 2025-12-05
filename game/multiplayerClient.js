@@ -31,6 +31,7 @@ export class MultiplayerClient {
     this.onGameOver = null; // (reason) => {}
     this.onReadyStatusChanged = null; // (playerId, isReady, readyCount, totalPlayers) => {}
     this.onChatMessage = null; // (playerId, message, timestamp) => {}
+    this.onTowerPlacementUpdate = null; // (towersPlaced, towerLimit) => {}
   }
   
   // Connect to the server
@@ -130,6 +131,11 @@ export class MultiplayerClient {
         // Castle health updated
         this.socket.on('castleHealthUpdate', (data) => {
           if (this.onCastleHealthUpdate) this.onCastleHealthUpdate(data.health);
+        });
+        
+        // Tower placement update
+        this.socket.on('towerPlacementUpdate', (data) => {
+          if (this.onTowerPlacementUpdate) this.onTowerPlacementUpdate(data.towersPlaced, data.towerLimit);
         });
         
         // Round started
