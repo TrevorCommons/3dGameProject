@@ -116,9 +116,14 @@ io.on('connection', (socket) => {
       readyPlayers.clear();
       
       gameState.startRound();
+      
+      // Generate enemy spawn data on server
+      const enemySpawns = gameState.generateEnemySpawns(gameState.enemiesInWave, gameState.wave);
+      
       io.emit('roundStarted', {
         wave: gameState.wave,
-        enemiesCount: gameState.enemiesInWave
+        enemiesCount: gameState.enemiesInWave,
+        enemySpawns: enemySpawns
       });
     }
   });

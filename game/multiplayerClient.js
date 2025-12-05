@@ -138,7 +138,7 @@ export class MultiplayerClient {
           // Reset ready status for all players
           this.readyPlayers.clear();
           this.isReady = false;
-          if (this.onRoundStarted) this.onRoundStarted(data.wave, data.enemiesCount);
+          if (this.onRoundStarted) this.onRoundStarted(data.wave, data.enemiesCount, data.enemySpawns);
         });
         
         // Enemy spawned

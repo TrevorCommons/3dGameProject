@@ -98,3 +98,53 @@ export function createPath(scene) {
 
     return { pathTiles, tiles, grid, pathCoords };
 }
+
+// Build path from server-provided coordinates
+export function buildPathFromCoords(scene, pathCoords) {
+    const GRID_SIZE = 50;
+    const TILE_SIZE = 1;
+    
+    const grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+    const tiles = [];
+    const pathTiles = [];
+    
+    // Mark path tiles in grid
+    for (const coord of pathCoords) {
+        grid[coord.y][coord.x] = 1;
+    }
+    
+    // Load grass texture
+    const loader = new THREE.TextureLoader();
+    const grassTexture = loader.load("assets/grass.jpg");
+    grassTexture.wrapS = THREE.RepeatWrapping;
+    grassTexture.wrapT = THREE.RepeatWrapping;
+    grassTexture.repeat.set(2, 2);
+    grassTexture.magFilter = THREE.NearestFilter;
+    grassTexture.minFilter = THREE.LinearMipMapLinearFilter;
+    
+    // Draw tiles
+    for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+            const val = grid[r][c];
+            const geo = new THREE.BoxGeometry(TILE_SIZE, 0.5, TILE_SIZE);
+            
+            let mat;
+            if (val === 1) {
+                mat = new THREE.MeshBasicMaterial({ color: 0xffd700 }); // path
+            } else {
+                mat = new THREE.MeshBasicMaterial({ map: grassTexture }); // grass
+            }
+            
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.x = (c - GRID_SIZE / 2) * TILE_SIZE + TILE_SIZE / 2;
+            mesh.position.y = 0.25;
+            mesh.position.z = (r - GRID_SIZE / 2) * TILE_SIZE + TILE_SIZE / 2;
+            
+            scene.add(mesh);
+            tiles.push(mesh);
+            if (val === 1) pathTiles.push(mesh);
+        }
+    }
+    
+    return { pathTiles, tiles, grid, pathCoords };
+}

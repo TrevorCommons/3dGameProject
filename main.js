@@ -1,6 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
 import { Player } from './game/player.js';
-import { createPath } from './game/path.js';
+import { createPath, buildPathFromCoords } from './game/path.js';
 import { Enemy } from './game/enemy.js';
 import { LOOT_DEFS, Loot, loadPersistentState, savePersistentState, applyLootToPlayerOrTower, addInventoryEntryFromPickup as addInvFromPickup, reserveInventoryUid as reserveInv, clearReservation as clearInvReservation, removeInventoryByUid, pickRandomLootKey, computeGoldMultiplier } from './game/loot.js';
 import { HealerTower, MageTower, ArcherTower, highlightTowerById as towerHighlight, selectTowerById as towerSelect, clearTowerSelection as towerClear } from './game/tower.js';
@@ -201,7 +201,37 @@ function createCloud(x, y, z) {
   return group;
 }
 
-// Create clouds
+// Function to create cloud from server data
+function createCloudFromData(cloudData) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+  
+  for (const sphereData of cloudData.spheres) {
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(sphereData.radius, 16, 16), mat);
+    sphere.position.set(sphereData.x, sphereData.y, sphereData.z);
+    group.add(sphere);
+  }
+  
+  group.position.set(cloudData.x, cloudData.y, cloudData.z);
+  group.scale.set(cloudData.scale, cloudData.scale, cloudData.scale);
+  scene.add(group);
+  return group;
+}
+
+// Function to rebuild clouds from server data
+function rebuildCloudsFromServer(cloudPositions) {
+  // Remove existing clouds
+  clouds.forEach(cloud => scene.remove(cloud));
+  clouds.length = 0;
+  
+  // Create clouds from server data
+  cloudPositions.forEach(cloudData => {
+    const cloud = createCloudFromData(cloudData);
+    clouds.push(cloud);
+  });
+}
+
+// Create clouds (will be replaced in multiplayer)
 for (let i = 0; i < 100; i++) {
     const halfArea = GRID_SIZE / 2 + spawnMargin;
     const x = (Math.random() * 2 - 1) * halfArea;  
@@ -321,8 +351,26 @@ const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.position.y = -0.5; // so top of ground is at y=0
 scene.add(ground);
 
-const {pathTiles, tiles, grid, pathCoords} = createPath(scene);
+// Path will be generated on first load, or replaced when connecting to multiplayer
+let pathTiles, tiles, grid, pathCoords;
+const initResult = createPath(scene);
+pathTiles = initResult.pathTiles;
+tiles = initResult.tiles;
+grid = initResult.grid;
+pathCoords = initResult.pathCoords;
 
+// Function to rebuild path from server data
+function rebuildPathFromServer(serverPathCoords) {
+  // Remove existing tiles
+  tiles.forEach(tile => scene.remove(tile));
+  
+  // Build new path from server coordinates
+  const result = buildPathFromCoords(scene, serverPathCoords);
+  pathTiles = result.pathTiles;
+  tiles = result.tiles;
+  grid = result.grid;
+  pathCoords = result.pathCoords;
+}
 
 // Use pathCoords directly for enemy movement
 // Enemy wave logic
@@ -362,25 +410,48 @@ const WAVE_CONFIG = {
   extraPowerupChance: 0.45 // 45% chance on the milestone wave
 };
 
-function spawnWave(numEnemies) {
-  // numEnemies may be used as a small offset from the computed wave size
+function spawnWave(numEnemies, enemySpawns = null) {
+  // If enemySpawns provided (multiplayer), use server data
+  if (enemySpawns && Array.isArray(enemySpawns)) {
+    const finalCount = enemySpawns.length;
+    currentWaveTotal = finalCount;
+    
+    // compute per-enemy stats
+    const enemyHealth = Math.min(WAVE_CONFIG.baseHealth * Math.pow(WAVE_CONFIG.healthScalePerWave, Math.max(0, waveNumber - 1)), WAVE_CONFIG.maxHealth);
+    const enemySpeed = Math.min(WAVE_CONFIG.baseSpeed + WAVE_CONFIG.speedIncreasePerWave * Math.max(0, waveNumber - 1), WAVE_CONFIG.maxSpeed);
+    const lootChance = Math.min(WAVE_CONFIG.baseLootChance + WAVE_CONFIG.lootChancePerWave * Math.max(0, waveNumber - 1), WAVE_CONFIG.maxLootChance);
+    
+    // Use server-provided loot carrier data
+    for (let i = 0; i < finalCount; i++) {
+      const spawnData = enemySpawns[i];
+      const carriesLootId = spawnData.carriesLoot; // Server determines who carries loot
+      const enemy = new Enemy(pathCoords, scene, { carriesLootId, maxHealth: enemyHealth, speed: enemySpeed, lootChance });
+      enemy.id = spawnData.id; // Use server-provided ID
+      enemy.progress = -spawnData.spawnDelay;
+      
+      if (typeof caveSpawnPos !== 'undefined' && caveSpawnPos) {
+        enemy.mesh.position.set(caveSpawnPos.x, caveSpawnPos.y, caveSpawnPos.z);
+      }
+      enemies.push(enemy);
+    }
+    
+    updateEnemiesRemaining();
+    return;
+  }
+  
+  // Single-player mode - original logic
   const offset = typeof numEnemies === 'number' ? numEnemies : 0;
-  // Compute final enemy count (ensure it increases with waveNumber)
   const approxCount = Math.floor(WAVE_CONFIG.baseEnemies + (waveNumber - 1) * WAVE_CONFIG.enemiesPerWave) + offset;
   const finalCount = Math.max(1, Math.min(WAVE_CONFIG.maxEnemies, approxCount));
-  // compute per-enemy stats
   const enemyHealth = Math.min(WAVE_CONFIG.baseHealth * Math.pow(WAVE_CONFIG.healthScalePerWave, Math.max(0, waveNumber - 1)), WAVE_CONFIG.maxHealth);
   const enemySpeed = Math.min(WAVE_CONFIG.baseSpeed + WAVE_CONFIG.speedIncreasePerWave * Math.max(0, waveNumber - 1), WAVE_CONFIG.maxSpeed);
   const lootChance = Math.min(WAVE_CONFIG.baseLootChance + WAVE_CONFIG.lootChancePerWave * Math.max(0, waveNumber - 1), WAVE_CONFIG.maxLootChance);
 
-  // Choose random loot carriers for this wave. Normally one guaranteed carrier.
   const chosenLootKey = pickRandomLootKey();
   const carryIndex = Math.floor(Math.random() * finalCount);
-  // On milestone waves (every extraPowerupEveryN), there is a chance to add an extra carrier
   const carryIndices = [carryIndex];
   if (WAVE_CONFIG.extraPowerupEveryN > 0 && waveNumber % WAVE_CONFIG.extraPowerupEveryN === 0) {
     if (Math.random() < WAVE_CONFIG.extraPowerupChance) {
-      // pick a different index for the extra carrier
       let extraIdx = Math.floor(Math.random() * finalCount);
       let attempts = 0;
       while (extraIdx === carryIndex && attempts < 12) { extraIdx = Math.floor(Math.random() * finalCount); attempts++; }
@@ -388,13 +459,11 @@ function spawnWave(numEnemies) {
     }
   }
 
-  // set currentWaveTotal so UI progress can use correct denominator
   currentWaveTotal = finalCount;
 
   for (let i = 0; i < finalCount; i++) {
     const carriesLootId = carryIndices.includes(i) ? chosenLootKey : null;
     const enemy = new Enemy(pathCoords, scene, { carriesLootId, maxHealth: enemyHealth, speed: enemySpeed, lootChance });
-    // Stagger spawn by offsetting their starting progress
     enemy.progress = -i * 0.5;
     // If a cave spawn position exists, place enemy inside cave initially
     if (typeof caveSpawnPos !== 'undefined' && caveSpawnPos) {
@@ -411,7 +480,7 @@ let currentWaveTotal = 0;
 let waveEl = null;
 let waveProgressBar = null;
 
-function startWave(numEnemies) {
+function startWave(numEnemies, enemySpawns = null) {
   if (gameWon) {
     showToast('You have already won the game. Reset to play again.');
     return;
@@ -425,7 +494,7 @@ function startWave(numEnemies) {
     void enemiesRemainingEl.offsetWidth;
     enemiesRemainingEl.classList.add('pulse');
   }
-  spawnWave(numEnemies);
+  spawnWave(numEnemies, enemySpawns);
 }
 
 function updateWaveUI() {
@@ -435,6 +504,35 @@ function updateWaveUI() {
     const pct = currentWaveTotal > 0 ? ((currentWaveTotal - remaining) / currentWaveTotal) * 100 : 0;
     waveProgressBar.style.width = pct + '%';
   }
+}
+
+// Store decoration meshes for cleanup
+let decorationMeshes = [];
+
+// Function to build decorations from server data
+function buildDecorationsFromServer(decorations) {
+  // Remove existing decorations
+  decorationMeshes.forEach(mesh => scene.remove(mesh));
+  decorationMeshes = [];
+  
+  const treeGeometry = new THREE.ConeGeometry(2, 5, 12);
+  const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x006400 });
+  const rockGeometry = new THREE.DodecahedronGeometry(0.8);
+  const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+  
+  decorations.forEach(dec => {
+    if (dec.type === 'tree') {
+      const tree = new THREE.Mesh(treeGeometry, treeMaterial);
+      tree.position.set(dec.x, dec.y, dec.z);
+      scene.add(tree);
+      decorationMeshes.push(tree);
+    } else if (dec.type === 'rock') {
+      const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+      rock.position.set(dec.x, dec.y, dec.z);
+      scene.add(rock);
+      decorationMeshes.push(rock);
+    }
+  });
 }
 
 // need to add some substance to the map (trees, rocks, castle, etc.)
@@ -479,10 +577,12 @@ function addDecorations(scene, grid) {
         const tree = new THREE.Mesh(treeGeometry, treeMaterial);
         tree.position.set((x - GRID_SIZE/2) * TILE_SIZE + TILE_SIZE/2, 0.75, (y - GRID_SIZE/2) * TILE_SIZE + TILE_SIZE/2);
         scene.add(tree);
+        decorationMeshes.push(tree);
       } else if (rand < 0.08) {
         const rock = new THREE.Mesh(rockGeometry, rockMaterial);
         rock.position.set(x - GRID_SIZE / 2, 0.25, y - GRID_SIZE / 2);
         scene.add(rock);
+        decorationMeshes.push(rock);
       }
     }
   }
@@ -1448,6 +1548,10 @@ document.addEventListener('keydown', (e) => {
 
 if (cameraToggleBtn) cameraToggleBtn.addEventListener('click', () => setUsingTopDown(!usingTopDown));
 if (startRoundBtn) startRoundBtn.addEventListener('click', () => {
+  // In multiplayer, this button becomes "Ready" and is replaced
+  // This only works in single-player mode
+  if (isMultiplayer) return;
+  
   if (gameWon) {
     showToast('You already won — reset to play again.');
     return;
@@ -1457,9 +1561,9 @@ if (startRoundBtn) startRoundBtn.addEventListener('click', () => {
   setUsingTopDown(false);
   startWave(6);
 });
-// Keyboard shortcut to start round: Enter or R
+// Keyboard shortcut to start round: Enter or R (single-player only)
 document.addEventListener('keydown', (e) => {
-  if ((e.key === 'Enter' || e.key.toLowerCase() === 'r') && !roundActive) {
+  if ((e.key === 'Enter' || e.key.toLowerCase() === 'r') && !roundActive && !isMultiplayer) {
     if (gameWon) {
       showToast('You already won — reset to play again.');
       return;
@@ -2111,9 +2215,19 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       updateCastleHealthUI();
     };
     
-    multiplayerClient.onRoundStarted = (wave, enemiesCount) => {
-      console.log('Round started:', wave);
+    multiplayerClient.onRoundStarted = (wave, enemiesCount, enemySpawns) => {
+      console.log('Round started:', wave, 'with', enemiesCount, 'enemies');
       showToast(`Wave ${wave} starting!`);
+      
+      // Start the round locally with server-provided enemy spawns
+      if (!roundActive) {
+        roundActive = true;
+        setUsingTopDown(false);
+        waveNumber = wave;
+        // Pass enemySpawns to spawnWave so all clients spawn same enemies
+        spawnWave(enemiesCount, enemySpawns);
+      }
+      
       // Reset ready button
       const startBtn = document.getElementById('startRound');
       if (startBtn) {
@@ -2149,6 +2263,24 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       if (goldEl) goldEl.textContent = gold.toString();
       castleHealth = initData.gameState.castleHealth;
       updateCastleHealthUI();
+      
+      // Rebuild map using server's path
+      if (initData.gameState.pathCoords) {
+        console.log('Rebuilding map from server path data');
+        rebuildPathFromServer(initData.gameState.pathCoords);
+      }
+      
+      // Rebuild decorations using server's data
+      if (initData.gameState.decorations) {
+        console.log('Rebuilding decorations from server data');
+        buildDecorationsFromServer(initData.gameState.decorations);
+      }
+      
+      // Rebuild clouds using server's data
+      if (initData.gameState.cloudPositions) {
+        console.log('Rebuilding clouds from server data');
+        rebuildCloudsFromServer(initData.gameState.cloudPositions);
+      }
     }
     
     // Create meshes for existing players
