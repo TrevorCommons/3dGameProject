@@ -2087,6 +2087,8 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       if (mesh) {
         mesh.position.set(position.x, position.y, position.z);
         mesh.rotation.set(rotation.x, rotation.y, rotation.z);
+        // Debug: log received movement (remove after testing)
+        // console.log('Player moved:', playerId.substring(0, 6), 'pos:', position.x.toFixed(2), position.y.toFixed(2), position.z.toFixed(2));
       }
     };
     
@@ -2186,15 +2188,23 @@ let lastPositionUpdate = 0;
 const POSITION_UPDATE_INTERVAL = 50; // ms
 
 function updateMultiplayerPosition() {
-  if (!isMultiplayer || !multiplayerClient || !player) return;
+  if (!isMultiplayer || !multiplayerClient || !player || !player.mesh) return;
   
   const now = Date.now();
   if (now - lastPositionUpdate < POSITION_UPDATE_INTERVAL) return;
   
   lastPositionUpdate = now;
+  
+  // Use player.mesh for position/rotation
+  const pos = player.mesh.position;
+  const rot = player.mesh.rotation;
+  
+  // Debug: log position updates (remove after testing)
+  // console.log('Sending position:', pos.x.toFixed(2), pos.y.toFixed(2), pos.z.toFixed(2));
+  
   multiplayerClient.sendPlayerMove(
-    { x: player.position.x, y: player.position.y, z: player.position.z },
-    { x: player.rotation.x, y: player.rotation.y, z: player.rotation.z }
+    { x: pos.x, y: pos.y, z: pos.z },
+    { x: rot.x, y: rot.y, z: rot.z }
   );
 }
 
