@@ -10,6 +10,10 @@ export class GameState {
     this.roundInProgress = false;
     this.enemiesInWave = 0;
     this.towerIdCounter = 0;
+    this.enemyIdCounter = 0;
+    
+    // Generate path once on server
+    this.pathCoords = this.generatePath();
     
     // Available player colors
     this.availableColors = [
@@ -23,6 +27,65 @@ export class GameState {
       0x800080  // Purple
     ];
     this.usedColorIndices = new Set();
+  }
+  
+  generatePath() {
+    const GRID_SIZE = 50;
+    const grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+    const pathCoords = [];
+    
+    let curX = Math.floor(GRID_SIZE / 2);
+    let curY = 0;
+    let curDirection = "DOWN";
+    let forceDirectionChange = false;
+    let currentCount = 0;
+    
+    grid[curY][curX] = 1;
+    pathCoords.push({ x: curX, y: curY });
+    
+    const checkDirections = () => {
+      if (curDirection === "LEFT" && (curX - 1 < 0 || grid[curY][curX - 1] !== 0)) forceDirectionChange = true;
+      else if (curDirection === "RIGHT" && (curX + 1 >= GRID_SIZE || grid[curY][curX + 1] !== 0)) forceDirectionChange = true;
+      else if (curDirection !== "DOWN") forceDirectionChange = true;
+    };
+    
+    const changeDirection = () => {
+      const dirValue = Math.floor(Math.random() * 3);
+      if (curDirection === "LEFT" || curDirection === "RIGHT") {
+        curDirection = "DOWN";
+        return;
+      }
+      if (dirValue === 0 && curX > 0) curDirection = "LEFT";
+      else if (dirValue === 1 && curX < GRID_SIZE - 1) curDirection = "RIGHT";
+      else curDirection = "DOWN";
+    };
+    
+    const chooseDirection = () => {
+      if (currentCount < 4 && !forceDirectionChange) currentCount++;
+      else {
+        const chanceToChange = Math.floor(Math.random() * 2) === 0;
+        if (chanceToChange || forceDirectionChange || currentCount > 7) {
+          currentCount = 0;
+          forceDirectionChange = false;
+          changeDirection();
+        }
+        currentCount++;
+      }
+    };
+    
+    while (curY < GRID_SIZE - 1) {
+      checkDirections();
+      chooseDirection();
+      
+      if (curDirection === "LEFT" && curX > 0) curX--;
+      else if (curDirection === "RIGHT" && curX < GRID_SIZE - 1) curX++;
+      else if (curDirection === "DOWN" && curY < GRID_SIZE - 1) curY++;
+      
+      grid[curY][curX] = 1;
+      pathCoords.push({ x: curX, y: curY });
+    }
+    
+    return pathCoords;
   }
   
   getNextPlayerColor() {
@@ -180,7 +243,20 @@ export class GameState {
       wave: this.wave,
       roundInProgress: this.roundInProgress,
       towers: Array.from(this.towers.entries()).map(([id, tower]) => ({ id, ...tower })),
-      enemies: Array.from(this.enemies.entries()).map(([id, enemy]) => ({ id, ...enemy }))
+      enemies: Array.from(this.enemies.entries()).map(([id, enemy]) => ({ id, ...enemy })),
+      pathCoords: this.pathCoords
     };
+  }
+  
+  generateEnemySpawns(numEnemies, waveNumber) {
+    const spawns = [];
+    for (let i = 0; i < numEnemies; i++) {
+      const enemyId = `enemy_${this.enemyIdCounter++}`;
+      spawns.push({
+        id: enemyId,
+        spawnDelay: i * 0.5 // stagger spawning
+      });
+    }
+    return spawns;
   }
 }
