@@ -52,12 +52,14 @@ io.on('connection', (socket) => {
   // Handle player movement
   socket.on('playerMove', (data) => {
     gameState.updatePlayerPosition(socket.id, data.position, data.rotation);
-    socket.broadcast.emit('playerMoved', {
-      playerId: socket.id,
-      position: data.position,
-      rotation: data.rotation
+    const player = gameState.players.get(socket.id);
+    io.emit('playerMoved', {
+        playerId: socket.id,
+        position: player.position,
+        rotation: player.rotation
     });
-  });
+});
+
   
   // Handle tower placement
   socket.on('placeTower', (data) => {
