@@ -28,6 +28,7 @@ export class MultiplayerClient {
     this.onGoldUpdate = null; // (gold) => {}
     this.onCastleHealthUpdate = null; // (health) => {}
     this.onRoundStarted = null; // (wave, enemiesCount) => {}
+    this.onRoundEnded = null; // (wave, nextWave) => {}
     this.onGameOver = null; // (reason) => {}
     this.onReadyStatusChanged = null; // (playerId, isReady, readyCount, totalPlayers) => {}
     this.onChatMessage = null; // (playerId, message, timestamp) => {}
@@ -147,6 +148,12 @@ export class MultiplayerClient {
           if (this.onRoundStarted) this.onRoundStarted(data.wave, data.enemiesCount, data.enemySpawns);
         });
         
+        // Round ended
+        this.socket.on('roundEnded', (data) => {
+          console.log('Round ended:', data.wave);
+          if (this.onRoundEnded) this.onRoundEnded(data.wave, data.nextWave);
+        });
+        
         // Enemy spawned
         this.socket.on('enemySpawned', (data) => {
           if (this.onEnemySpawned) this.onEnemySpawned(data.enemyId, data.position, data.health);
@@ -248,10 +255,10 @@ export class MultiplayerClient {
     }
   }
   
-  // Send enemy died
-  sendEnemyDied(enemyId) {
+  // Send enemy died with optional gold multiplier
+  sendEnemyDied(enemyId, goldMultiplier = 1.0) {
     if (this.socket && this.connected) {
-      this.socket.emit('enemyDied', { enemyId });
+      this.socket.emit('enemyDied', { enemyId, goldMultiplier });
     }
   }
   

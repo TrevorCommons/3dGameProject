@@ -433,7 +433,7 @@ function spawnWave(numEnemies, enemySpawns = null) {
       const enemyHealth = spawnData.healthMultiplier ? baseHealth * spawnData.healthMultiplier : baseHealth;
       
       const enemy = new Enemy(pathCoords, scene, { carriesLootId, maxHealth: enemyHealth, speed: enemySpeed, lootChance });
-      enemy.id = spawnData.id; // Use server-provided ID
+      enemy._id = spawnData.id; // Use server-provided ID (note: _id with underscore!)
       enemy.progress = -spawnData.spawnDelay;
       
       if (typeof caveSpawnPos !== 'undefined' && caveSpawnPos) {
@@ -917,6 +917,12 @@ const player = new Player(fpCamera, bounds, ATTACK_DAMAGE);
 player.mesh.position.y = 1; // raise above ground
 scene.add(player.mesh);
 player.enemies = enemies;
+
+// Initialize player damage from persistent state if upgrades exist
+if (persistentState.player && typeof persistentState.player.baseDamage === 'number') {
+  player.baseDamage = persistentState.player.baseDamage;
+  console.log(`Player damage initialized from persistent state: ${player.baseDamage}`);
+}
 
 // Player movement
 const keys = {};
@@ -1402,8 +1408,29 @@ function openLootModalForTowerSelection(defId, opts) {
     const title = document.createElement('div');
     title.style.fontWeight = 'bold';
     title.style.marginBottom = '8px';
-    title.textContent = LOOT_DEFS[defId] ? LOOT_DEFS[defId].name : defId;
+    const lootName = LOOT_DEFS[defId] ? LOOT_DEFS[defId].name : defId;
+    title.textContent = lootName;
     lootTowerList.appendChild(title);
+    
+    // Add description if available
+    if (LOOT_DEFS[defId] && LOOT_DEFS[defId].description) {
+      const desc = document.createElement('div');
+      desc.style.fontSize = '0.9em';
+      desc.style.color = '#aaa';
+      desc.style.marginBottom = '8px';
+      desc.textContent = LOOT_DEFS[defId].description;
+      lootTowerList.appendChild(desc);
+    }
+    
+    // Warn about multiplayer behavior
+    if (isMultiplayer) {
+      const note = document.createElement('div');
+      note.style.fontSize = '0.85em';
+      note.style.color = '#ffaa00';
+      note.style.marginBottom = '8px';
+      note.textContent = '⚠️ Multiplayer: Upgrades apply this session only';
+      lootTowerList.appendChild(note);
+    }
   } catch (e) {}
   // Add Store button so loot can be stored directly from modal if desired
   try {
@@ -1430,6 +1457,7 @@ function openLootModalForTowerSelection(defId, opts) {
     lootTowerList.appendChild(storeBtn);
   } catch (e) {}
   // Create list of towers with buttons to choose
+  console.log(`Opening loot modal for ${defId}, towers available: ${towers.length}`);
   towers.forEach((t, idx) => {
     // ensure persistent id present so we can check upgrades
     try { ensureTowerId(t); } catch (e) {}
@@ -1445,7 +1473,9 @@ function openLootModalForTowerSelection(defId, opts) {
     const cap = (typeof def.stackCapPerTower === 'number') ? def.stackCapPerTower : 1;
 
     const b = document.createElement('button');
-    b.textContent = `Apply to ${t.constructor.name} (${existing}/${cap})`;
+    const towerName = t.constructor.name || 'Tower';
+    const lootName = def.name || defId;
+    b.textContent = `Apply ${lootName} to ${towerName} (${existing}/${cap})`;
     // disable if already at cap
     if (existing >= cap) {
       b.disabled = true;
@@ -1462,7 +1492,12 @@ function openLootModalForTowerSelection(defId, opts) {
       try {
         const name = LOOT_DEFS[defId] ? LOOT_DEFS[defId].name : defId;
         const pos = towerWorldToGrid(t) || { x: '?', y: '?' };
-        showToast(`Applied ${name} to ${t.constructor.name} (${pos.x},${pos.y})`);
+        const msg = `Applied ${name} to ${t.constructor.name} (${pos.x},${pos.y})`;
+        if (isMultiplayer) {
+          showToast(msg + ' (active this session)');
+        } else {
+          showToast(msg);
+        }
       } catch (e) {}
       // If this item was from the player's inventory (opts.inventoryUid defined), remove that specific uid
       if (opts && opts.inventoryUid && persistentState.player && Array.isArray(persistentState.player.inventory)) {
@@ -1481,7 +1516,7 @@ function openLootModalForTowerSelection(defId, opts) {
           if (invIdx !== -1) persistentState.player.inventory.splice(invIdx, 1);
         }
       }
-      savePersistentState(persistentState);
+      savePersistentState(persistentState, isMultiplayer);
       lootModal.style.display = 'none';
       refreshUpgradesUI();
     });
@@ -1683,11 +1718,6 @@ function handlePlayerMovement() {
 }
 
 //Towers
-let towersBuiltThisRound = 0;
-let towerLimitPerRound = 1;
-
-
-
 function buildTower(type, x, y) {
   type = type.toLowerCase(); // normalize
 
@@ -1758,32 +1788,19 @@ function createTowerFromServer(towerId, type, position) {
   // Store tower with server ID for future reference
   tower.serverId = towerId;
   towers.push(tower);
-  towersBuiltThisRound++;
+  towersPlacedThisRound++;
   return tower;
 }
 
-function getGridCoordsFromClick(mouseX, mouseY) {
-  // Use raycasting in THREE.js
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-  mouse.x = (mouseX / window.innerWidth) * 2 - 1;
-  mouse.y = -(mouseY / window.innerHeight) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-
-  const intersects = raycaster.intersectObject(ground);
-  if (intersects.length > 0) {
-    const point = intersects[0].point;
-    const x = Math.round(point.x + GRID_SIZE/2);
-    const y = Math.round(point.z + GRID_SIZE/2);
-    buildTower(selectedTowerType, x, y);
-    selectedTowerType = null;
-  }
-  return null;
-}
-
 window.addEventListener("click", (event) => {
-  if (!selectedTowerType) return; if (towersBuiltThisRound >= towerLimitPerRound) {
+  if (!selectedTowerType) return;
+  
+  // Don't place tower if clicking on UI elements
+  if (event.target.closest('button, .hud, .panel, .modal, #inventory-panel, #tower-buttons, #ui-container')) {
+    return;
+  }
+  
+  if (roundActive && towersPlacedThisRound >= towerLimitThisRound) {
     console.log("Tower limit reached for this round");
     return;
   }
@@ -1923,10 +1940,19 @@ function animate() {
     if (enemies[i].currentStep >= enemies[i].pathCoords.length - 1) {
       // remove visual
       scene.remove(enemies[i].mesh);
+      const enemyId = enemies[i]._id;
       enemies.splice(i, 1);
-      // damage castle
-      castleHealth = Math.max(0, castleHealth - 1);
-      updateCastleHealthUI();
+      
+      // In multiplayer, send castle damage to server (server will broadcast)
+      if (isMultiplayer && multiplayerClient) {
+        multiplayerClient.sendCastleDamaged(1);
+        // Also notify server that enemy is gone (no gold reward since it reached castle)
+        multiplayerClient.sendEnemyDied(enemyId, 0);
+      } else {
+        // Single player: damage castle locally
+        castleHealth = Math.max(0, castleHealth - 1);
+        updateCastleHealthUI();
+      }
       updateEnemiesRemaining();
       // simple game over check
       if (castleHealth <= 0) {
@@ -2041,7 +2067,7 @@ function animate() {
     if (waveProgressBar) waveProgressBar.style.width = '0%';
     updateWaveUI();
     setUsingTopDown(true);
-    towersBuiltThisRound = 0;
+    towersPlacedThisRound = 0;
     // Check win condition: beating round 20 (unless Endless Mode is enabled)
     if (waveNumber > 20 && !gameWon && !endlessMode) {
       gameWon = true;
@@ -2093,19 +2119,46 @@ const currentTime = performance.now() / 1000;
 
 towers.forEach(tower => {
   if (tower instanceof HealerTower) tower.update(player, currentTime);
-  else tower.update(enemies, currentTime);
+  else tower.update(enemies, currentTime, isMultiplayer ? multiplayerClient : null);
 });
 // Process any enemies killed by towers during their update pass
+if (isMultiplayer && enemies.length > 0) {
+  console.log('Checking', enemies.length, 'enemies for death...');
+}
 for (let i = enemies.length - 1; i >= 0; i--) {
   const e = enemies[i];
   if (!e) continue;
+  
+  if (isMultiplayer && enemies.length > 0 && i === enemies.length - 1) {
+    console.log('First enemy check - health:', e.health, 'dead:', e.dead, 'id:', e._id);
+  }
+  
+  // In multiplayer, check if enemy just died (health <= 0) and notify server
+  if (isMultiplayer && multiplayerClient && e.health <= 0 && !e.dead && e._id) {
+    console.log('Enemy died locally! Sending enemyDied to server:', e._id, 'health:', e.health);
+    e.dead = true;
+    const goldMult = computeGoldMultiplier(persistentState) || 1.0;
+    multiplayerClient.sendEnemyDied(e._id, goldMult);
+    // Server will broadcast enemyDied which removes it from all clients
+    continue;
+  }
+  
   // If the enemy has a stored death result or marked dead, process removal
   const death = e._deathResult || (e.dead ? e.die && e.die() : null);
   if (death) {
-    // Give coins
-    const coins = death.coins || 0;
-    if (coins) addGold(coins);
-    // spawn loot if present and none spawned this round
+    // In multiplayer, send enemy death to server (server handles gold and broadcasts)
+    if (isMultiplayer && multiplayerClient && e._id) {
+      // Calculate and send gold multiplier so server can apply it
+      const goldMult = computeGoldMultiplier(persistentState) || 1.0;
+      multiplayerClient.sendEnemyDied(e._id, goldMult);
+      // Don't add gold locally - server will broadcast goldUpdate
+    } else {
+      // Single player: handle gold locally
+      const coins = death.coins || 0;
+      if (coins) addGold(coins);
+    }
+    
+    // spawn loot if present (client-side only, not synced)
     if (death.loot) {
       const finalLootId = death.loot.id || pickRandomLootKey();
       const pos = death.loot.pos || { x: e.mesh.position.x, y: e.mesh.position.y, z: e.mesh.position.z };
@@ -2269,6 +2322,47 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
       updateTowerLimitUI();
     };
     
+    multiplayerClient.onEnemyUpdate = (enemyId, position, health) => {
+      // Find enemy by ID and update its health and position
+      const enemy = enemies.find(e => e._id === enemyId);
+      if (enemy) {
+        enemy.health = health;
+        if (enemy.mesh && position) {
+          enemy.mesh.position.set(position.x, position.y, position.z);
+        }
+        // Update health bar
+        if (enemy.healthBar && enemy.maxHealth) {
+          const pct = enemy.health / enemy.maxHealth;
+          enemy.healthBar.scale.x = pct;
+          enemy.healthBar.position.x = (pct - 1) / 2;
+          enemy.healthBar.material.color.setHSL(pct * 0.3, 1, 0.5);
+        }
+        // Don't send enemyDied here - the client that dealt the killing blow will handle it
+      }
+    };
+    
+    multiplayerClient.onEnemyDied = (enemyId, totalGold, goldEarned) => {
+      // Update gold from server
+      gold = totalGold;
+      if (goldEl) goldEl.textContent = gold.toString();
+      
+      // Find and remove enemy by ID
+      const enemyIndex = enemies.findIndex(e => e._id === enemyId);
+      if (enemyIndex !== -1) {
+        const enemy = enemies[enemyIndex];
+        // Remove visual
+        try { scene.remove(enemy.mesh); } catch (err) {}
+        enemies.splice(enemyIndex, 1);
+        updateEnemiesRemaining();
+        updateWaveUI();
+        
+        // Show gold earned notification
+        if (goldEarned) {
+          showToast(`+${goldEarned}g from enemy`);
+        }
+      }
+    };
+    
     multiplayerClient.onRoundStarted = (wave, enemiesCount, enemySpawns) => {
       console.log('Round started:', wave, 'with', enemiesCount, 'enemies');
       showToast(`Wave ${wave} starting!`);
@@ -2288,11 +2382,27 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
         spawnWave(enemiesCount, enemySpawns);
       }
       
-      // Reset ready button
+      // Disable ready button during round
       const startBtn = document.getElementById('startRound');
       if (startBtn) {
+        startBtn.textContent = 'Round in Progress';
+        startBtn.classList.remove('ready-active');
+        startBtn.disabled = true;
+      }
+    };
+    
+    multiplayerClient.onRoundEnded = (wave, nextWave) => {
+      console.log('CLIENT RECEIVED ROUND ENDED EVENT, wave:', wave);
+      // Don't set roundActive or camera here - let the local game loop handle round ending
+      // Just re-enable the ready button
+      const startBtn = document.getElementById('startRound');
+      if (startBtn) {
+        console.log('Re-enabling ready button for next round');
         startBtn.textContent = 'Ready (0/?)';
         startBtn.classList.remove('ready-active');
+        startBtn.disabled = false;
+      } else {
+        console.error('Start button not found!');
       }
     };
     

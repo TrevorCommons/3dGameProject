@@ -100,6 +100,8 @@ io.on('connection', (socket) => {
   
   // Handle ready toggle (vote-based system)
   socket.on('toggleReady', (data) => {
+    console.log(`Player ${socket.id} toggled ready: ${data.isReady}, roundInProgress: ${gameState.roundInProgress}`);
+    
     if (data.isReady) {
       readyPlayers.add(socket.id);
     } else {
@@ -108,6 +110,8 @@ io.on('connection', (socket) => {
     
     const totalPlayers = gameState.players.size;
     const readyCount = readyPlayers.size;
+    
+    console.log(`Ready: ${readyCount}/${totalPlayers}, roundInProgress: ${gameState.roundInProgress}`);
     
     // Broadcast ready status to all players
     io.emit('readyStatusChanged', {
@@ -149,13 +153,26 @@ io.on('connection', (socket) => {
   
   // Handle enemy death
   socket.on('enemyDied', (data) => {
-    const goldReward = gameState.removeEnemy(data.enemyId);
-    gameState.addGold(goldReward);
+    const wasRoundInProgress = gameState.roundInProgress;
+    const baseGoldReward = gameState.removeEnemy(data.enemyId);
+    // Apply client's gold multiplier if provided
+    const multiplier = (typeof data.goldMultiplier === 'number' && data.goldMultiplier > 0) ? data.goldMultiplier : 1.0;
+    const actualGoldReward = Math.floor(baseGoldReward * multiplier);
+    gameState.addGold(actualGoldReward);
     io.emit('enemyDied', {
       enemyId: data.enemyId,
       gold: gameState.gold,
-      goldEarned: goldReward
+      goldEarned: actualGoldReward
     });
+    
+    // Check if round ended (all enemies dead)
+    if (wasRoundInProgress && !gameState.roundInProgress) {
+      console.log('Round ended! Broadcasting roundEnded event to all clients');
+      io.emit('roundEnded', {
+        wave: gameState.wave,
+        nextWave: gameState.wave
+      });
+    }
   });
   
   // Handle castle damage

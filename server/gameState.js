@@ -13,6 +13,7 @@ export class GameState {
     this.enemyIdCounter = 0;
     this.towersPlacedThisRound = 0;
     this.towerLimitThisRound = 0;
+    this.towersPlacedByPlayer = new Map(); // playerId -> count for this round
     
     // Generate path once on server
     this.pathCoords = this.generatePath();
@@ -209,7 +210,11 @@ export class GameState {
   getTowerLimitForRound() {
     const playerCount = this.players.size;
     if (playerCount === 1) return 2; // Single player gets 2 towers
-    return Math.min(playerCount, 4); // Multiplayer: 1 per player, max 4
+    return 1; // Multiplayer: 1 tower per player
+  }
+  
+  getTowerLimitPerPlayer() {
+    return this.getTowerLimitForRound();
   }
   
   removePlayer(playerId) {
@@ -274,9 +279,12 @@ export class GameState {
   }
   
   placeTower(type, position, playerId) {
-    // Check tower placement limit for this round
-    if (this.roundInProgress && this.towersPlacedThisRound >= this.towerLimitThisRound) {
-      return { success: false, reason: 'Tower limit reached for this round' };
+    // Check per-player tower placement limit for this round
+    const currentPlayerTowerCount = this.towersPlacedByPlayer.get(playerId) || 0;
+    const limitPerPlayer = this.getTowerLimitPerPlayer();
+    
+    if (this.roundInProgress && currentPlayerTowerCount >= limitPerPlayer) {
+      return { success: false, reason: `Tower limit reached (${limitPerPlayer} per player this round)` };
     }
     
     // Tower costs (should match client-side constants)
@@ -314,7 +322,19 @@ export class GameState {
       upgrades: []
     });
     
-    return { success: true, towerId };
+    // Increment tower counter for this round (both global and per-player)
+    if (this.roundInProgress) {
+      this.towersPlacedThisRound++;
+      const currentCount = this.towersPlacedByPlayer.get(playerId) || 0;
+      this.towersPlacedByPlayer.set(playerId, currentCount + 1);
+    }
+    
+    // Calculate remaining towers for this player
+    const playerTowerCount = this.towersPlacedByPlayer.get(playerId) || 0;
+    const towerLimit = this.getTowerLimitPerPlayer();
+    const towersRemaining = towerLimit - playerTowerCount;
+    
+    return { success: true, towerId, towersRemaining };
   }
   
   getDefaultTowerStats(type) {
@@ -356,8 +376,16 @@ export class GameState {
   
   removeEnemy(enemyId) {
     this.enemies.delete(enemyId);
+    
+    // Check if all enemies are dead and round should end
+    console.log(`Enemy removed. Enemies remaining: ${this.enemies.size}, Round in progress: ${this.roundInProgress}`);
+    if (this.roundInProgress && this.enemies.size === 0) {
+      console.log('All enemies dead - ending round');
+      this.endRound();
+    }
+    
     // Return gold reward based on enemy type
-    return 10; // Base gold reward
+    return 5; // Base gold reward (reduced from 10)
   }
   
   addGold(amount) {
@@ -374,6 +402,7 @@ export class GameState {
     // Reset tower placement counter and set limit
     this.towersPlacedThisRound = 0;
     this.towerLimitThisRound = this.getTowerLimitForRound();
+    this.towersPlacedByPlayer.clear(); // Reset per-player counters
     
     // Calculate scaled enemy count based on player count
     const playerCount = Math.max(1, this.players.size);
@@ -421,7 +450,7 @@ export class GameState {
     else if (playerCount >= 4) healthMultiplier = 1.5;
     
     // Determine loot carriers (same logic as client)
-    const lootKeys = ['attackBoost', 'healthBoost', 'speedBoost', 'goldBoost', 'rangeBoost'];
+    const lootKeys = ['powercore_module', 'overclock_chip', 'sharpened_blade', 'gold_hoard'];
     const chosenLootKey = lootKeys[Math.floor(Math.random() * lootKeys.length)];
     const carryIndex = Math.floor(Math.random() * numEnemies);
     const carryIndices = [carryIndex];
@@ -443,6 +472,16 @@ export class GameState {
       const enemyId = `enemy_${this.enemyIdCounter++}`;
       const carriesLoot = carryIndices.includes(i) ? chosenLootKey : null;
       
+      // Add enemy to server tracking immediately
+      // We'll set proper health and position when clients report them
+      const baseHealth = 12; // Default starting health
+      const enemyHealth = baseHealth * healthMultiplier;
+      this.enemies.set(enemyId, {
+        position: { x: 0, y: 0, z: 0 },
+        health: enemyHealth,
+        maxHealth: enemyHealth
+      });
+      
       spawns.push({
         id: enemyId,
         spawnDelay: i * 0.5,
@@ -450,6 +489,7 @@ export class GameState {
         healthMultiplier: healthMultiplier
       });
     }
+    console.log(`Generated ${numEnemies} enemies for wave ${waveNumber}, server tracking ${this.enemies.size} enemies`);
     return spawns;
   }
 }

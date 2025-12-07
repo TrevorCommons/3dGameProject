@@ -94,7 +94,7 @@ export class MageTower extends Tower {
     scene.add(this.mesh);
   }
 
-  update(enemies, currentTime) {
+  update(enemies, currentTime, multiplayerClient) {
     if (!this.canAttack(currentTime)) return;
     if (!enemies || enemies.length === 0) return;
     const range = (TOWER_DEFAULTS.mage && TOWER_DEFAULTS.mage.range) || 8;
@@ -102,14 +102,18 @@ export class MageTower extends Tower {
       if (!e || !e.mesh) continue;
       const d = Math.hypot(e.mesh.position.x - this.mesh.position.x, e.mesh.position.z - this.mesh.position.z);
       if (d <= range) {
-  // Slightly higher base damage for mage (buffed)
-  const dmg = 0.18 * ((this._modifiers && this._modifiers.damage) || 1);
+  // Balanced damage for mage tower
+  const dmg = 1.5 * ((this._modifiers && this._modifiers.damage) || 1);
         if (typeof e.takeDamage === 'function') {
           const res = e.takeDamage(dmg);
           if (res) e._deathResult = res;
         } else {
           e.health -= dmg;
           if (e.health <= 0 && typeof e.die === 'function') e._deathResult = e.die();
+        }
+        // Sync enemy health in multiplayer
+        if (multiplayerClient && e._id) {
+          multiplayerClient.sendEnemyUpdate(e._id, { x: e.mesh.position.x, y: e.mesh.position.y, z: e.mesh.position.z }, e.health);
         }
       }
     }
@@ -149,7 +153,7 @@ export class ArcherTower extends Tower {
       const platformMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
       const platform = new THREE.Mesh(platformGeo, platformMat);
       platform.position.y = 3; // top of pillars
-      this.mesh.add(platform)
+      this.mesh.add(platform);
 
     // Add a tiny archer figure on top 
     const archerGeo = new THREE.BoxGeometry(0.3, 0.8, 0.3);
@@ -162,7 +166,7 @@ export class ArcherTower extends Tower {
     scene.add(this.mesh);
   }
 
-  update(enemies, currentTime) {
+  update(enemies, currentTime, multiplayerClient) {
     if (!this.canAttack(currentTime)) return;
     if (!enemies || enemies.length === 0) return;
     let closest = null;
@@ -175,11 +179,15 @@ export class ArcherTower extends Tower {
     const range = (TOWER_DEFAULTS.archer && TOWER_DEFAULTS.archer.range) || 20;
     if (closest && dist <= range) {
       if (typeof closest.takeDamage === 'function') {
-        const result = closest.takeDamage(7);
+        const result = closest.takeDamage(3);
         if (result) closest._deathResult = result;
       } else {
-        closest.health -= 7;
+        closest.health -= 3;
         if (closest.health <= 0 && typeof closest.die === 'function') closest._deathResult = closest.die();
+      }
+      // Sync enemy health in multiplayer
+      if (multiplayerClient && closest._id) {
+        multiplayerClient.sendEnemyUpdate(closest._id, { x: closest.mesh.position.x, y: closest.mesh.position.y, z: closest.mesh.position.z }, closest.health);
       }
       this.recordAttack(currentTime);
     }

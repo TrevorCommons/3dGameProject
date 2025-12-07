@@ -85,7 +85,12 @@ export function loadPersistentState() {
   }
 }
 
-export function savePersistentState(state) {
+export function savePersistentState(state, skipInMultiplayer = false) {
+  // In multiplayer, tower modifiers are applied to objects but not persisted
+  // because they need to be synchronized through the server
+  if (skipInMultiplayer && typeof window !== 'undefined' && window.isMultiplayer) {
+    return; // Skip localStorage in multiplayer
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
