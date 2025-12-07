@@ -228,46 +228,47 @@ export class GameState {
     }
     this.players.delete(playerId);
   }
-  
+
   updatePlayerPosition(playerId, newPosition, rotation) {
     const player = this.players.get(playerId);
     if (!player) return;
 
-    const playerRadius = 2;   // Base collision radius
-    const verticalThreshold = 2; // Only push if roughly same height
-    const repulsionFactor = 0.5; // Adjusts strength of exponential push
+    const RADIUS = 1; // size of player sphere (adjust as needed)
 
+    // Check collision with all other players
     for (let [otherId, other] of this.players) {
         if (otherId === playerId) continue;
 
-        // Vector difference
         const dx = newPosition.x - other.position.x;
         const dz = newPosition.z - other.position.z;
-        const dy = newPosition.y - other.position.y;
+        const dist = Math.sqrt(dx*dx + dz*dz);
 
-        const distance = Math.sqrt(dx*dx + dz*dz);
+        const minDist = RADIUS * 2;
 
-        if (distance < playerRadius * 2 && Math.abs(dy) < verticalThreshold) {
-            const overlap = playerRadius * 2 - distance;
+        if (dist < minDist) {
+            // They are overlapping - hard collision resolution
 
-            // Exponential push based on overlap
-            const pushStrength = Math.exp(overlap) * repulsionFactor;
+            // If they are exactly on top of each other (rare, but safe to handle)
+            const nx = dist === 0 ? 1 : dx / dist;
+            const nz = dist === 0 ? 0 : dz / dist;
 
-            const angle = Math.atan2(dz, dx);
-            const pushX = Math.cos(angle) * pushStrength * 0.5;
-            const pushZ = Math.sin(angle) * pushStrength * 0.5;
+            const overlap = minDist - dist;
 
-            newPosition.x += pushX;
-            newPosition.z += pushZ;
+            // Push THIS player back fully until they no longer overlap
+            newPosition.x += nx * overlap;
+            newPosition.z += nz * overlap;
 
-            other.position.x -= pushX;
-            other.position.z -= pushZ;
+            // Push OTHER player back equally (fair collision)
+            other.position.x -= nx * overlap;
+            other.position.z -= nz * overlap;
         }
     }
 
+    // Save new position
     player.position = newPosition;
     player.rotation = rotation;
 }
+
 
 
   getPlayers() {
