@@ -2417,8 +2417,50 @@ async function initMultiplayer(serverUrl = 'http://localhost:3000') {
     };
     
     multiplayerClient.onGameOver = (reason) => {
+      console.log('Game over received:', reason);
+      roundActive = false;
       showToast(`Game Over: ${reason}`);
-      gameActive = false;
+      
+      // Show game over overlay
+      if (!document.getElementById('gameOverOverlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'gameOverOverlay';
+        overlay.style.position = 'fixed';
+        overlay.style.left = '0';
+        overlay.style.top = '0';
+        overlay.style.right = '0';
+        overlay.style.bottom = '0';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.background = 'rgba(0,0,0,0.8)';
+        overlay.style.color = 'white';
+        overlay.style.fontSize = '28px';
+        overlay.style.zIndex = 9999;
+        
+        const box = document.createElement('div');
+        box.style.textAlign = 'center';
+        box.style.padding = '20px';
+        box.style.background = '#222';
+        box.style.borderRadius = '8px';
+        box.textContent = 'Game Over - ' + reason;
+        
+        const btn = document.createElement('button');
+        btn.textContent = 'Return to Menu';
+        btn.style.marginTop = '12px';
+        btn.addEventListener('click', () => {
+          try {
+            const ov = document.getElementById('gameOverOverlay');
+            if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+          } catch (e) {}
+          if (startMenu) startMenu.style.display = 'flex';
+          resetGameState();
+        });
+        
+        box.appendChild(btn);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+      }
     };
     
     // Connect to server

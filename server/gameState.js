@@ -443,12 +443,12 @@ export class GameState {
   generateEnemySpawns(numEnemies, waveNumber) {
     const spawns = [];
     
-    // Calculate health multiplier based on player count
+    // Calculate health multiplier based on player count (buffed for better challenge)
     const playerCount = Math.max(1, this.players.size);
-    let healthMultiplier = 1.0;
-    if (playerCount === 2) healthMultiplier = 1.2;
-    else if (playerCount === 3) healthMultiplier = 1.35;
-    else if (playerCount >= 4) healthMultiplier = 1.5;
+    let healthMultiplier = 1.5; // Increased base from 1.0 to 1.5
+    if (playerCount === 2) healthMultiplier = 2.0; // Increased from 1.2
+    else if (playerCount === 3) healthMultiplier = 2.5; // Increased from 1.35
+    else if (playerCount >= 4) healthMultiplier = 3.0; // Increased from 1.5
     
     // Determine loot carriers (same logic as client)
     const lootKeys = ['powercore_module', 'overclock_chip', 'sharpened_blade', 'gold_hoard'];
